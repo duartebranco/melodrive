@@ -60,6 +60,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.documentfile)
+    implementation(libs.newpipe.extractor)
+    implementation(libs.okhttp)
 
     debugImplementation(libs.androidx.ui.tooling)
 }
