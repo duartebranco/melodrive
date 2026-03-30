@@ -13,7 +13,6 @@ data class SearchState(
     val results: List<YtSearchResult> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
-    val ytDlpReady: Boolean = false,
 )
 
 class SearchViewModel(app: Application) : AndroidViewModel(app) {
@@ -22,24 +21,6 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<SearchState> = _state
 
     private var searchJob: Job? = null
-
-    init {
-        ensureYtDlp()
-    }
-
-    private fun ensureYtDlp() {
-        viewModelScope.launch {
-            if (!YtDlpInstaller.isInstalled(getApplication())) {
-                try {
-                    YtDlpInstaller.install(getApplication())
-                } catch (e: Exception) {
-                    _state.value = _state.value.copy(error = "yt-dlp download failed: ${e.message}")
-                    return@launch
-                }
-            }
-            _state.value = _state.value.copy(ytDlpReady = true)
-        }
-    }
 
     fun onQueryChange(q: String) {
         _state.value = _state.value.copy(query = q)
@@ -51,11 +32,11 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
-            try {
-                val results = YtDlpWrapper.search(getApplication(), q)
-                _state.value = _state.value.copy(results = results, loading = false)
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(loading = false, error = e.message)
+            val results = YtDlpWrapper.search(q)
+            _state.value = if (results.isEmpty() && _state.value.loading) {
+                _state.value.copy(loading = false, error = "no results or search failed")
+            } else {
+                _state.value.copy(results = results, loading = false)
             }
         }
     }

@@ -151,9 +151,7 @@ class MusicService : MediaBrowserServiceCompat() {
         serviceScope.launch {
             val items = tracks.mapIndexed { i, track ->
                 if (track.source == TrackSource.YOUTUBE && i == startIndex) {
-                    val streamUri = YtDlpWrapper.resolveStreamUrl(
-                        this@MusicService, track.id
-                    ) ?: track.uri
+                    val streamUri = YtDlpWrapper.resolveStreamUrl(track.id) ?: track.uri
                     MediaItem.fromUri(streamUri)
                 } else {
                     MediaItem.fromUri(track.uri)

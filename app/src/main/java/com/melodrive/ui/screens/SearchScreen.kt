@@ -70,14 +70,13 @@ fun SearchScreen(
             Spacer(Modifier.width(8.dp))
             IconButton(
                 onClick = vm::search,
-                enabled = state.ytDlpReady && !state.loading,
+                enabled = !state.loading,
             ) {
                 Icon(Icons.Default.Search, contentDescription = "search")
             }
         }
 
         when {
-            !state.ytDlpReady && state.error == null -> InstallingHint()
             state.error != null -> ErrorHint(state.error!!)
             state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
@@ -154,21 +153,6 @@ private fun YtSearchResult.toTrack() = Track(
     artworkUri = Uri.parse(thumbnailUrl),
     durationMs = durationSeconds * 1000L,
 )
-
-@Composable
-private fun InstallingHint() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            Text(
-                text = "downloading yt-dlp…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-        }
-    }
-}
 
 @Composable
 private fun ErrorHint(message: String) {
