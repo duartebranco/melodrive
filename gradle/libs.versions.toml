@@ -10,6 +10,7 @@ coil = "2.7.0"
 coroutines = "1.9.0"
 lifecycleViewmodel = "2.8.7"
 navigationCompose = "2.8.5"
+documentFile = "1.0.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,6 +30,7 @@ media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "medi
 androidx-media = { group = "androidx.media", name = "media", version.ref = "androidxMedia" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentFile" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
