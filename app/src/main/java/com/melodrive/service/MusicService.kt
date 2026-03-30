@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.File
 import java.net.URL
 
 class MusicService : MediaBrowserServiceCompat() {
@@ -33,7 +34,6 @@ class MusicService : MediaBrowserServiceCompat() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
-    // tracks currently loaded into the player queue
     private var queue: List<Track> = emptyList()
 
     override fun onCreate() {
@@ -57,11 +57,7 @@ class MusicService : MediaBrowserServiceCompat() {
         serviceScope.launch { MusicRepository.loadFromStoredFolder(this@MusicService) }
     }
 
-    override fun onStartCommand(
-        intent: android.content.Intent?,
-        flags: Int,
-        startId: Int,
-    ): Int {
+    override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
         MediaButtonReceiver.handleIntent(mediaSession, intent)
         return super.onStartCommand(intent, flags, startId)
     }
@@ -80,7 +76,7 @@ class MusicService : MediaBrowserServiceCompat() {
         serviceScope.launch {
             val items = when (parentId) {
                 MEDIA_ROOT_ID -> buildRootItems()
-                LOCAL_ROOT_ID -> buildTrackItems(MusicRepository.tracks.value)
+                LOCAL_ROOT_ID -> buildTrackItems(MusicRepository.localTracks.value)
                 else -> emptyList()
             }
             result.sendResult(items)
@@ -112,33 +108,32 @@ class MusicService : MediaBrowserServiceCompat() {
         )
 
     private val sessionCallback = object : MediaSessionCompat.Callback() {
-
         override fun onPlay() = player.play()
-
         override fun onPause() = player.pause()
-
         override fun onStop() {
             player.stop()
             stopForeground(STOP_FOREGROUND_REMOVE)
             mediaSession.isActive = false
         }
-
         override fun onSkipToNext() = player.seekToNextMediaItem()
-
         override fun onSkipToPrevious() = player.seekToPreviousMediaItem()
-
         override fun onSeekTo(pos: Long) = player.seekTo(pos)
 
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
-            val tracks = MusicRepository.tracks.value
-            val index = tracks.indexOfFirst { it.id == mediaId }
-            if (index < 0) return
+            val track = MusicRepository.findById(mediaId ?: return) ?: return
+            val (tracks, index) = if (track.source == TrackSource.YOUTUBE) {
+                val q = MusicRepository.playbackQueue.value
+                Pair(q, q.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
+            } else {
+                val q = MusicRepository.localTracks.value
+                Pair(q, q.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
+            }
             playQueue(tracks, index)
         }
 
         override fun onPlayFromSearch(query: String?, extras: Bundle?) {
             val q = query?.lowercase() ?: return
-            val tracks = MusicRepository.tracks.value
+            val tracks = MusicRepository.localTracks.value
             val index = tracks.indexOfFirst {
                 it.title.lowercase().contains(q) || it.artist.lowercase().contains(q)
             }
@@ -165,25 +160,20 @@ class MusicService : MediaBrowserServiceCompat() {
     }
 
     private val playerListener = object : Player.Listener {
-
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             updatePlaybackState()
             if (isPlaying) {
-                val notification = notificationManager.buildNotification(mediaSession)
-                startForeground(NOTIFICATION_ID, notification)
+                startForeground(NOTIFICATION_ID, notificationManager.buildNotification(mediaSession))
             } else {
                 stopForeground(STOP_FOREGROUND_DETACH)
                 notificationManager.update(mediaSession)
             }
         }
 
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            updatePlaybackState()
-        }
+        override fun onPlaybackStateChanged(playbackState: Int) = updatePlaybackState()
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            val index = player.currentMediaItemIndex
-            queue.getOrNull(index)?.let { updateMetadata(it) }
+            queue.getOrNull(player.currentMediaItemIndex)?.let { updateMetadata(it) }
         }
     }
 
@@ -213,7 +203,13 @@ class MusicService : MediaBrowserServiceCompat() {
 
     private fun updateMetadata(track: Track) {
         serviceScope.launch(Dispatchers.IO) {
-            val art = loadArtworkBitmap(track)
+            val artBitmap = loadArtworkBitmap(track)
+            // uri used by both the notification large icon and the Now Playing screen's Coil image
+            val artUri = when {
+                track.source == TrackSource.YOUTUBE -> track.artworkUri?.toString()
+                artBitmap != null -> saveArtworkToCache(track.id, artBitmap)
+                else -> null
+            }
             val metadata = MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, track.id)
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE, track.title)
@@ -221,7 +217,15 @@ class MusicService : MediaBrowserServiceCompat() {
                 .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, track.album)
                 .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, track.durationMs)
                 .apply {
-                    if (art != null) putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, art)
+                    if (artBitmap != null) {
+                        putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artBitmap)
+                    }
+                    if (artUri != null) {
+                        // DISPLAY_ICON_URI is what MediaDescriptionCompat.iconUri reads —
+                        // this is what NowPlayingViewModel exposes to the UI as artworkUri
+                        putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI, artUri)
+                        putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, artUri)
+                    }
                 }
                 .build()
             mediaSession.setMetadata(metadata)
@@ -229,22 +233,22 @@ class MusicService : MediaBrowserServiceCompat() {
         }
     }
 
-    private fun loadArtworkBitmap(track: Track): Bitmap? {
-        return try {
-            when {
-                track.source == TrackSource.LOCAL ->
-                    ArtworkLoader.loadEmbedded(this, track.uri)
-                track.artworkUri != null -> {
-                    URL(track.artworkUri.toString()).openStream().use {
-                        BitmapFactory.decodeStream(it)
-                    }
-                }
-                else -> null
+    private fun loadArtworkBitmap(track: Track): Bitmap? = try {
+        when (track.source) {
+            TrackSource.LOCAL -> ArtworkLoader.loadEmbedded(this, track.uri)
+            TrackSource.YOUTUBE -> track.artworkUri?.let { uri ->
+                URL(uri.toString()).openStream().use { BitmapFactory.decodeStream(it) }
             }
-        } catch (_: Exception) {
-            null
         }
-    }
+    } catch (_: Exception) { null }
+
+    // saves a bitmap to cache and returns a file:// uri string coil can load
+    private fun saveArtworkToCache(trackId: String, bitmap: Bitmap): String? = try {
+        val safe = trackId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val file = File(cacheDir, "art_$safe.jpg")
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+        Uri.fromFile(file).toString()
+    } catch (_: Exception) { null }
 
     override fun onDestroy() {
         serviceJob.cancel()

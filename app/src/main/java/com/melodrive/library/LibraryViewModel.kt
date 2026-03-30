@@ -10,8 +10,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+data class Album(
+    val name: String,
+    val artist: String,
+    val tracks: List<Track>,
+    val artworkUri: Uri? = null,
+)
+
 data class LibraryState(
     val tracks: List<Track> = emptyList(),
+    val albums: List<Album> = emptyList(),
     val loading: Boolean = false,
     val folderUri: Uri? = null,
 )
@@ -22,11 +30,12 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<LibraryState> = _state
 
     init {
-        // restore previously selected folder on re-launch
         val savedUri = MusicRepository.loadFolderUri(app)
-        if (savedUri != null && MusicRepository.tracks.value.isNotEmpty()) {
+        val cached = MusicRepository.localTracks.value
+        if (savedUri != null && cached.isNotEmpty()) {
             _state.value = LibraryState(
-                tracks = MusicRepository.tracks.value,
+                tracks = cached,
+                albums = albumsFrom(cached),
                 folderUri = savedUri,
             )
         } else if (savedUri != null) {
@@ -38,9 +47,26 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(folderUri = uri, loading = true)
         viewModelScope.launch {
             val tracks = LibraryScanner.scanFolder(getApplication(), uri)
-            MusicRepository.setTracks(tracks)
+            MusicRepository.setLocalTracks(tracks)
             MusicRepository.saveFolderUri(getApplication(), uri)
-            _state.value = _state.value.copy(tracks = tracks, loading = false)
+            _state.value = _state.value.copy(
+                tracks = tracks,
+                albums = albumsFrom(tracks),
+                loading = false,
+            )
         }
     }
+
+    private fun albumsFrom(tracks: List<Track>): List<Album> =
+        tracks
+            .groupBy { it.album.ifEmpty { "Unknown Album" } }
+            .map { (name, albumTracks) ->
+                Album(
+                    name = name,
+                    artist = albumTracks.firstOrNull()?.artist ?: "",
+                    tracks = albumTracks,
+                    artworkUri = albumTracks.firstOrNull()?.artworkUri,
+                )
+            }
+            .sortedBy { it.name }
 }

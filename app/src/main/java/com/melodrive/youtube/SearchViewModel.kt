@@ -22,6 +22,19 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
 
     private var searchJob: Job? = null
 
+    init {
+        // populate the tab immediately so the user sees music without having to search first
+        loadInitial()
+    }
+
+    private fun loadInitial() {
+        searchJob = viewModelScope.launch {
+            _state.value = _state.value.copy(loading = true)
+            val results = YtDlpWrapper.search("trending music")
+            _state.value = _state.value.copy(results = results, loading = false)
+        }
+    }
+
     fun onQueryChange(q: String) {
         _state.value = _state.value.copy(query = q)
     }
@@ -33,11 +46,11 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
         searchJob = viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
             val results = YtDlpWrapper.search(q)
-            _state.value = if (results.isEmpty() && _state.value.loading) {
-                _state.value.copy(loading = false, error = "no results or search failed")
-            } else {
-                _state.value.copy(results = results, loading = false)
-            }
+            _state.value = _state.value.copy(
+                results = results,
+                loading = false,
+                error = if (results.isEmpty()) "no results" else null,
+            )
         }
     }
 }

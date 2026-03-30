@@ -15,18 +15,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.melodrive.library.Album
 import com.melodrive.library.LibraryViewModel
 import com.melodrive.model.Track
 
@@ -46,15 +54,15 @@ fun LibraryScreen(
 ) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     val folderPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
-        // persist permission across reboots
         context.contentResolver.takePersistableUriPermission(
             uri,
-            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
         )
         vm.setFolder(uri)
     }
@@ -73,11 +81,8 @@ fun LibraryScreen(
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = { folderPicker.launch(null) }) {
-                Icon(
-                    imageVector = Icons.Default.FolderOpen,
-                    contentDescription = "pick folder",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+                Icon(Icons.Default.FolderOpen, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(6.dp))
                 Text("Pick folder", color = MaterialTheme.colorScheme.primary)
             }
@@ -87,24 +92,40 @@ fun LibraryScreen(
             state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
-            state.tracks.isEmpty() && state.folderUri != null -> EmptyLibraryHint()
             state.folderUri == null -> PickFolderHint { folderPicker.launch(null) }
-            else -> TrackList(tracks = state.tracks, onTrackClick = onTrackClick)
+            state.tracks.isEmpty() -> EmptyLibraryHint()
+            else -> {
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 },
+                        text = { Text("Songs") })
+                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 },
+                        text = { Text("Albums") })
+                }
+                when (selectedTab) {
+                    0 -> SongList(tracks = state.tracks, onTrackClick = onTrackClick)
+                    1 -> AlbumList(albums = state.albums, onAlbumClick = { album ->
+                        if (album.tracks.isNotEmpty()) onTrackClick(album.tracks, 0)
+                    })
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun TrackList(
-    tracks: List<Track>,
-    onTrackClick: (List<Track>, Int) -> Unit,
-) {
+private fun SongList(tracks: List<Track>, onTrackClick: (List<Track>, Int) -> Unit) {
     LazyColumn {
         itemsIndexed(tracks) { index, track ->
-            TrackRow(
-                track = track,
-                onClick = { onTrackClick(tracks, index) },
-            )
+            TrackRow(track = track, onClick = { onTrackClick(tracks, index) })
+        }
+    }
+}
+
+@Composable
+private fun AlbumList(albums: List<Album>, onAlbumClick: (Album) -> Unit) {
+    LazyColumn {
+        items(albums, key = { it.name }) { album ->
+            AlbumRow(album = album, onClick = { onAlbumClick(album) })
         }
     }
 }
@@ -118,59 +139,83 @@ private fun TrackRow(track: Track, onClick: () -> Unit) {
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(track.artworkUri ?: track.uri)
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(6.dp)),
-            fallback = rememberMusicNotePlaceholder(),
-            error = rememberMusicNotePlaceholder(),
-        )
+        ArtworkThumbnail(uri = track.artworkUri, fallback = Icons.Default.MusicNote)
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
+            Text(track.title, style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
             if (track.artist.isNotEmpty()) {
-                Text(
-                    text = track.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
+                Text(track.artist, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
     }
 }
 
 @Composable
-private fun rememberMusicNotePlaceholder() =
-    androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.MusicNote)
+private fun AlbumRow(album: Album, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ArtworkThumbnail(uri = album.artworkUri, fallback = Icons.Default.Album)
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(album.name, style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+            Text(
+                text = buildString {
+                    if (album.artist.isNotEmpty()) append(album.artist)
+                    if (album.artist.isNotEmpty()) append(" · ")
+                    append("${album.tracks.size} songs")
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArtworkThumbnail(
+    uri: Uri?,
+    fallback: androidx.compose.ui.graphics.vector.ImageVector,
+) {
+    if (uri != null) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(uri)
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)),
+            error = androidx.compose.ui.graphics.vector.rememberVectorPainter(fallback),
+        )
+    } else {
+        Icon(
+            imageVector = fallback,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp).padding(8.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
 
 @Composable
 private fun PickFolderHint(onPick: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = Icons.Default.FolderOpen,
-                contentDescription = null,
+            Icon(Icons.Default.FolderOpen, null,
                 modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "no folder selected",
-                style = MaterialTheme.typography.bodyMedium,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("no folder selected", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp),
-            )
+                modifier = Modifier.padding(top = 12.dp))
             TextButton(onClick = onPick, modifier = Modifier.padding(top = 8.dp)) {
                 Text("pick a folder", color = MaterialTheme.colorScheme.primary)
             }
@@ -181,10 +226,7 @@ private fun PickFolderHint(onPick: () -> Unit) {
 @Composable
 private fun EmptyLibraryHint() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = "no audio files found",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Text("no audio files found", style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
