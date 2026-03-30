@@ -39,9 +39,7 @@ class MainActivity : ComponentActivity() {
 
     private val connectionCallback = object : MediaBrowserCompat.ConnectionCallback() {
         override fun onConnected() {
-            mediaController = MediaControllerCompat(
-                this@MainActivity, mediaBrowser.sessionToken
-            )
+            mediaController = MediaControllerCompat(this@MainActivity, mediaBrowser.sessionToken)
         }
     }
 
@@ -91,7 +89,8 @@ class MainActivity : ComponentActivity() {
                         NavHost(navController = navController, startDestination = "library") {
                             composable("library") {
                                 LibraryScreen(onTrackClick = { tracks, index ->
-                                    MusicRepository.setTracks(tracks)
+                                    // local tracks — set playback queue to the library list
+                                    MusicRepository.setPlaybackQueue(tracks)
                                     mediaController?.transportControls
                                         ?.playFromMediaId(tracks[index].id, null)
                                     navController.navigate("now_playing") { launchSingleTop = true }
@@ -99,7 +98,8 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("search") {
                                 SearchScreen(onTrackClick = { track ->
-                                    MusicRepository.setTracks(listOf(track))
+                                    // youtube track — only update playback queue, never localTracks
+                                    MusicRepository.setPlaybackQueue(listOf(track))
                                     mediaController?.transportControls
                                         ?.playFromMediaId(track.id, null)
                                     navController.navigate("now_playing") { launchSingleTop = true }
@@ -121,7 +121,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        mediaController?.unregisterCallback(object : MediaControllerCompat.Callback() {})
         mediaBrowser.disconnect()
         super.onStop()
     }
