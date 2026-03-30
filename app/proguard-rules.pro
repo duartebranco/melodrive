@@ -1,0 +1,3 @@
+-keep class com.melodrive.service.** { *; }
+-keep class androidx.media.** { *; }
+-keep class androidx.media3.** { *; }
