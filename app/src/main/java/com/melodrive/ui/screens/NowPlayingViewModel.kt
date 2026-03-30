@@ -2,14 +2,19 @@ package com.melodrive.ui.screens
 
 import android.app.Application
 import android.content.ComponentName
+import android.os.SystemClock
 import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaControllerCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.melodrive.service.MusicService
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 data class NowPlayingState(
     val title: String = "",
@@ -28,6 +33,7 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
 
     private var mediaBrowser: MediaBrowserCompat? = null
     private var controller: MediaControllerCompat? = null
+    private var tickerJob: Job? = null
 
     private val connectionCallback = object : MediaBrowserCompat.ConnectionCallback() {
         override fun onConnected() {
@@ -60,11 +66,39 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         override fun onPlaybackStateChanged(state: PlaybackStateCompat?) {
+            val isPlaying = state?.state == PlaybackStateCompat.STATE_PLAYING
             _state.value = _state.value.copy(
-                isPlaying = state?.state == PlaybackStateCompat.STATE_PLAYING,
-                positionMs = state?.position ?: 0L,
+                isPlaying = isPlaying,
+                positionMs = currentPosition(state),
             )
+            if (isPlaying) startTicker() else stopTicker()
         }
+    }
+
+    // ticks every 500ms while playing to keep the seek bar moving
+    private fun startTicker() {
+        if (tickerJob?.isActive == true) return
+        tickerJob = viewModelScope.launch {
+            while (true) {
+                delay(500L)
+                _state.value = _state.value.copy(
+                    positionMs = currentPosition(controller?.playbackState),
+                )
+            }
+        }
+    }
+
+    private fun stopTicker() {
+        tickerJob?.cancel()
+        tickerJob = null
+    }
+
+    // derives real-time position from the state snapshot + elapsed wall-clock time
+    private fun currentPosition(state: PlaybackStateCompat?): Long {
+        if (state == null) return 0L
+        if (state.state != PlaybackStateCompat.STATE_PLAYING) return state.position
+        val elapsed = SystemClock.elapsedRealtime() - state.lastPositionUpdateTime
+        return (state.position + elapsed * state.playbackSpeed).toLong()
     }
 
     fun connect() {
@@ -78,6 +112,7 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() {
+        stopTicker()
         controller?.unregisterCallback(controllerCallback)
         mediaBrowser?.disconnect()
         mediaBrowser = null
