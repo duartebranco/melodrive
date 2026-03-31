@@ -61,8 +61,7 @@ class StreamViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _state.value = _state.value.copy(results = results, loading = false)
             } else {
-                val results = YtDlpWrapper.search("trending music")
-                _state.value = _state.value.copy(results = results, loading = false)
+                _state.value = _state.value.copy(results = emptyList(), loading = false)
             }
         }
     }

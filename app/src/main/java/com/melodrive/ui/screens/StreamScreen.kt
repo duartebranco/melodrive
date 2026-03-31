@@ -86,8 +86,19 @@ fun StreamScreen(
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
 
-            state.results.isEmpty() && state.query.isNotEmpty() -> EmptyResultsHint()
-            else -> ResultList(results = state.results, onTracksClick = onTracksClick, vm = vm)
+            state.results.isEmpty() && state.query.isNotEmpty() -> EmptyResultsHint("no results")
+            state.results.isEmpty() && state.query.isEmpty() -> EmptyResultsHint("Never streamed")
+            else -> {
+                if (state.query.isEmpty()) {
+                    Text(
+                        text = "Last played",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                ResultList(results = state.results, onTracksClick = onTracksClick, vm = vm)
+            }
         }
     }
 }
@@ -196,10 +207,10 @@ private fun ErrorHint(message: String) {
 }
 
 @Composable
-private fun EmptyResultsHint() {
+private fun EmptyResultsHint(message: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
-            text = "no results",
+            text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
