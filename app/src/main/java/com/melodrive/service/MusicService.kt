@@ -190,6 +190,14 @@ class MusicService : MediaBrowserServiceCompat() {
 
         override fun onPlaybackStateChanged(playbackState: Int) = updatePlaybackState()
 
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            updatePlaybackState()
+        }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queue.getOrNull(player.currentMediaItemIndex)?.let { updateMetadata(it) }
         }

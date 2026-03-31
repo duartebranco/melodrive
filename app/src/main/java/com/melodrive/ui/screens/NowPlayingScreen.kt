@@ -189,11 +189,52 @@ private fun TransportControls(
     val viewModel: NowPlayingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val state by viewModel.state.collectAsState()
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        IconButton(onClick = { viewModel.toggleRepeatMode() }, modifier = Modifier.size(48.dp)) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.align(Alignment.Center),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            IconButton(onClick = onSkipPrevious, modifier = Modifier.size(56.dp)) {
+                Icon(
+                    Icons.Default.SkipPrevious,
+                    contentDescription = "previous",
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+
+            // large play/pause button
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                IconButton(onClick = onTogglePlayPause, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "pause" else "play",
+                        modifier = Modifier.size(40.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+            }
+
+            IconButton(onClick = onSkipNext, modifier = Modifier.size(56.dp)) {
+                Icon(
+                    Icons.Default.SkipNext,
+                    contentDescription = "next",
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+
+        IconButton(
+            onClick = { viewModel.toggleRepeatMode() },
+            modifier = Modifier.align(Alignment.CenterEnd).size(48.dp)
+        ) {
             val icon = if (state.repeatMode == android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ONE) {
                 Icons.Default.RepeatOne
             } else {
@@ -209,41 +250,6 @@ private fun TransportControls(
                 contentDescription = "repeat",
                 modifier = Modifier.size(28.dp),
                 tint = tint,
-            )
-        }
-
-        IconButton(onClick = onSkipPrevious, modifier = Modifier.size(56.dp)) {
-            Icon(
-                Icons.Default.SkipPrevious,
-                contentDescription = "previous",
-                modifier = Modifier.size(36.dp),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-
-        // large play/pause button
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .background(MaterialTheme.colorScheme.primary, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            IconButton(onClick = onTogglePlayPause, modifier = Modifier.fillMaxSize()) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "pause" else "play",
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
-        }
-
-        IconButton(onClick = onSkipNext, modifier = Modifier.size(56.dp)) {
-            Icon(
-                Icons.Default.SkipNext,
-                contentDescription = "next",
-                modifier = Modifier.size(36.dp),
-                tint = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
