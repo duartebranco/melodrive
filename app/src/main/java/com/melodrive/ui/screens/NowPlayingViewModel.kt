@@ -31,6 +31,11 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(NowPlayingState())
     val state: StateFlow<NowPlayingState> = _state
+    val history = com.melodrive.service.MusicRepository.history
+
+    fun clearHistory() {
+        com.melodrive.service.MusicRepository.clearHistory()
+    }
 
     private var mediaBrowser: MediaBrowserCompat? = null
     private var controller: MediaControllerCompat? = null

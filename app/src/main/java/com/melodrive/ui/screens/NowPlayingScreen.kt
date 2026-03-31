@@ -28,6 +28,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -46,31 +51,42 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 
 @Composable
-fun NowPlayingScreen(vm: NowPlayingViewModel = viewModel()) {
+fun NowPlayingScreen(onBack: () -> Unit = {}, vm: NowPlayingViewModel = viewModel()) {
     val state by vm.state.collectAsState()
+    val history by vm.history.collectAsState()
 
     DisposableEffect(Unit) {
         vm.connect()
         onDispose { /* keep connected while app is open */ }
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 28.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(16.dp))
+        item {
+            Box(Modifier.fillMaxWidth()) {
+                IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "close")
+                }
+            }
+        }
+        item {
+            Spacer(Modifier.height(16.dp))
+        }
 
-        // artwork
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface),
-            contentAlignment = Alignment.Center,
-        ) {
+        item {
+            // artwork
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center,
+            ) {
             if (state.artworkUri != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
@@ -91,48 +107,98 @@ fun NowPlayingScreen(vm: NowPlayingViewModel = viewModel()) {
             }
         }
 
-        Spacer(Modifier.height(32.dp))
+        }
+        item {
+            Spacer(Modifier.height(32.dp))
 
-        // title and artist
-        Text(
-            text = state.title.ifEmpty { "nothing playing" },
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-        )
-        if (state.artist.isNotEmpty()) {
+            // title and artist
             Text(
-                text = state.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = state.title.ifEmpty { "nothing playing" },
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
-                modifier = Modifier.padding(top = 4.dp),
             )
+            if (state.artist.isNotEmpty()) {
+                Text(
+                    text = state.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
 
-        Spacer(Modifier.height(24.dp))
+        item {
+            Spacer(Modifier.height(24.dp))
 
-        // seek bar
-        if (state.durationMs > 0) {
-            SeekBar(
-                positionMs = state.positionMs,
-                durationMs = state.durationMs,
-                onSeek = vm::seekTo,
+            // seek bar
+            if (state.durationMs > 0) {
+                SeekBar(
+                    positionMs = state.positionMs,
+                    durationMs = state.durationMs,
+                    onSeek = vm::seekTo,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // transport controls
+            TransportControls(
+                isPlaying = state.isPlaying,
+                onTogglePlayPause = vm::togglePlayPause,
+                onSkipPrevious = vm::skipPrevious,
+                onSkipNext = vm::skipNext,
             )
-            Spacer(Modifier.height(8.dp))
+
+            Spacer(Modifier.height(48.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Last Played", style = MaterialTheme.typography.titleMedium)
+                if (history.isNotEmpty()) {
+                    TextButton(onClick = { vm.clearHistory() }) {
+                        Text("Clear")
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            
+            if (history.isEmpty()) {
+                Text(
+                    "No recently played tracks.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 32.dp)
+                )
+            }
         }
-
-        Spacer(Modifier.weight(1f))
-
-        // transport controls
-        TransportControls(
-            isPlaying = state.isPlaying,
-            onTogglePlayPause = vm::togglePlayPause,
-            onSkipPrevious = vm::skipPrevious,
-            onSkipNext = vm::skipNext,
-        )
-
-        Spacer(Modifier.height(32.dp))
+        
+        items(history, key = { it.id + it.hashCode() }) { track ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = track.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = track.artist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
     }
 }
 

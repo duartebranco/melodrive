@@ -21,6 +21,21 @@ object MusicRepository {
     private val _playbackQueue = MutableStateFlow<List<Track>>(emptyList())
     val playbackQueue: StateFlow<List<Track>> = _playbackQueue
 
+    // the history of played tracks
+    private val _history = MutableStateFlow<List<Track>>(emptyList())
+    val history: StateFlow<List<Track>> = _history
+
+    fun addToHistory(track: Track) {
+        val current = _history.value.toMutableList()
+        current.removeAll { it.id == track.id }
+        current.add(0, track)
+        _history.value = current.take(50)
+    }
+
+    fun clearHistory() {
+        _history.value = emptyList()
+    }
+
     fun setLocalTracks(tracks: List<Track>) {
         _localTracks.value = tracks
         // keep queue in sync when replaying from library

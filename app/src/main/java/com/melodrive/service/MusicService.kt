@@ -163,7 +163,9 @@ class MusicService : MediaBrowserServiceCompat() {
             player.setMediaItems(items, startIndex, 0L)
             player.prepare()
             player.play()
-            updateMetadata(tracks[startIndex])
+            val track = tracks[startIndex]
+            updateMetadata(track)
+            MusicRepository.addToHistory(track)
         }
     }
 
@@ -199,7 +201,12 @@ class MusicService : MediaBrowserServiceCompat() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            queue.getOrNull(player.currentMediaItemIndex)?.let { updateMetadata(it) }
+            queue.getOrNull(player.currentMediaItemIndex)?.let { track ->
+                updateMetadata(track)
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
+                    MusicRepository.addToHistory(track)
+                }
+            }
         }
     }
 

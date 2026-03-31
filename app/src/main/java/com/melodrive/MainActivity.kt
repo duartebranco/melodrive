@@ -20,6 +20,25 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.melodrive.ui.screens.NowPlayingViewModel
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -63,7 +82,50 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
-                        NavigationBar {
+                        Column {
+                            val npVm: NowPlayingViewModel = viewModel()
+                            val npState by npVm.state.collectAsState()
+                            
+                            AnimatedVisibility(
+                                visible = currentRoute != "now_playing" && npState.title.isNotEmpty(),
+                                enter = slideInVertically { it },
+                                exit = slideOutVertically { it }
+                            ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.clickable { 
+                                        navController.navigate("now_playing") { launchSingleTop = true }
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = npState.title,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = npState.artist,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                        }
+                                        IconButton(onClick = { npVm.togglePlayPause() }) {
+                                            Icon(
+                                                if (npState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                contentDescription = "play/pause"
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            NavigationBar {
                             NavigationBarItem(
                                 selected = currentRoute == "library",
                                 onClick = { navController.navigate("library") { launchSingleTop = true } },
@@ -82,6 +144,7 @@ class MainActivity : ComponentActivity() {
                                 icon = { Icon(Icons.Default.MusicNote, null) },
                                 label = { Text("Now Playing") },
                             )
+                        }
                         }
                     },
                 ) { innerPadding ->
@@ -106,7 +169,7 @@ class MainActivity : ComponentActivity() {
                                 })
                             }
                             composable("now_playing") {
-                                NowPlayingScreen()
+                                NowPlayingScreen(onBack = { navController.popBackStack() })
                             }
                         }
                     }
