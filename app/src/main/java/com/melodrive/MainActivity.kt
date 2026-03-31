@@ -29,7 +29,7 @@ import com.melodrive.service.MusicRepository
 import com.melodrive.service.MusicService
 import com.melodrive.ui.screens.LibraryScreen
 import com.melodrive.ui.screens.NowPlayingScreen
-import com.melodrive.ui.screens.SearchScreen
+import com.melodrive.ui.screens.StreamScreen
 import com.melodrive.ui.theme.MeloDriveTheme
 
 class MainActivity : ComponentActivity() {
@@ -71,10 +71,10 @@ class MainActivity : ComponentActivity() {
                                 label = { Text("Library") },
                             )
                             NavigationBarItem(
-                                selected = currentRoute == "search",
-                                onClick = { navController.navigate("search") { launchSingleTop = true } },
+                                selected = currentRoute == "stream",
+                                onClick = { navController.navigate("stream") { launchSingleTop = true } },
                                 icon = { Icon(Icons.Default.Search, null) },
-                                label = { Text("Search") },
+                                label = { Text("Stream") },
                             )
                             NavigationBarItem(
                                 selected = currentRoute == "now_playing",
@@ -96,12 +96,12 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("now_playing") { launchSingleTop = true }
                                 })
                             }
-                            composable("search") {
-                                SearchScreen(onTrackClick = { track ->
+                            composable("stream") {
+                                StreamScreen(onTracksClick = { tracks ->
                                     // youtube track — only update playback queue, never localTracks
-                                    MusicRepository.setPlaybackQueue(listOf(track))
+                                    MusicRepository.setPlaybackQueue(tracks)
                                     mediaController?.transportControls
-                                        ?.playFromMediaId(track.id, null)
+                                        ?.playFromMediaId(tracks.first().id, null)
                                     navController.navigate("now_playing") { launchSingleTop = true }
                                 })
                             }
