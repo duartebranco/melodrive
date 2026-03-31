@@ -24,6 +24,7 @@ data class NowPlayingState(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val connected: Boolean = false,
+    val repeatMode: Int = PlaybackStateCompat.REPEAT_MODE_NONE,
 )
 
 class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
@@ -72,6 +73,10 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
                 positionMs = currentPosition(state),
             )
             if (isPlaying) startTicker() else stopTicker()
+        }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            _state.value = _state.value.copy(repeatMode = repeatMode)
         }
     }
 
@@ -129,9 +134,19 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
 
     fun seekTo(positionMs: Long) = controller?.transportControls?.seekTo(positionMs)
 
+    fun toggleRepeatMode() {
+        val nextMode = when (_state.value.repeatMode) {
+            PlaybackStateCompat.REPEAT_MODE_NONE -> PlaybackStateCompat.REPEAT_MODE_ALL
+            PlaybackStateCompat.REPEAT_MODE_ALL -> PlaybackStateCompat.REPEAT_MODE_ONE
+            else -> PlaybackStateCompat.REPEAT_MODE_NONE
+        }
+        controller?.transportControls?.setRepeatMode(nextMode)
+    }
+
     private fun syncFromController(c: MediaControllerCompat) {
         controllerCallback.onMetadataChanged(c.metadata)
         controllerCallback.onPlaybackStateChanged(c.playbackState)
+        controllerCallback.onRepeatModeChanged(c.repeatMode)
     }
 
     override fun onCleared() {

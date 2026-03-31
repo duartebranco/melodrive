@@ -18,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
@@ -142,7 +144,7 @@ private fun SeekBar(
 ) {
     var dragging by remember { mutableFloatStateOf(-1f) }
     val progress = if (dragging >= 0f) dragging
-                   else (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    else (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
 
     Column {
         Slider(
@@ -184,10 +186,32 @@ private fun TransportControls(
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
 ) {
+    val viewModel: NowPlayingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val state by viewModel.state.collectAsState()
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        IconButton(onClick = { viewModel.toggleRepeatMode() }, modifier = Modifier.size(48.dp)) {
+            val icon = if (state.repeatMode == android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ONE) {
+                Icons.Default.RepeatOne
+            } else {
+                Icons.Default.Repeat
+            }
+            val tint = if (state.repeatMode == android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_NONE) {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.primary
+            }
+            Icon(
+                imageVector = icon,
+                contentDescription = "repeat",
+                modifier = Modifier.size(28.dp),
+                tint = tint,
+            )
+        }
+
         IconButton(onClick = onSkipPrevious, modifier = Modifier.size(56.dp)) {
             Icon(
                 Icons.Default.SkipPrevious,
