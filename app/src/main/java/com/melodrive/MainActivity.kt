@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
                         Column {
                             val npVm: NowPlayingViewModel = viewModel()
                             val npState by npVm.state.collectAsState()
-                            
+
                             AnimatedVisibility(
                                 visible = currentRoute != "now_playing" && npState.title.isNotEmpty(),
                                 enter = slideInVertically { it },
@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.clickable { 
+                                    modifier = Modifier.clickable {
                                         navController.navigate("now_playing") { launchSingleTop = true }
                                     }
                                 ) {
@@ -126,25 +126,25 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             NavigationBar {
-                            NavigationBarItem(
-                                selected = currentRoute == "library",
-                                onClick = { navController.navigate("library") { launchSingleTop = true } },
-                                icon = { Icon(Icons.Default.LibraryMusic, null) },
-                                label = { Text("Library") },
-                            )
-                            NavigationBarItem(
-                                selected = currentRoute == "stream",
-                                onClick = { navController.navigate("stream") { launchSingleTop = true } },
-                                icon = { Icon(Icons.Default.Search, null) },
-                                label = { Text("Stream") },
-                            )
-                            NavigationBarItem(
-                                selected = currentRoute == "now_playing",
-                                onClick = { navController.navigate("now_playing") { launchSingleTop = true } },
-                                icon = { Icon(Icons.Default.MusicNote, null) },
-                                label = { Text("Now Playing") },
-                            )
-                        }
+                                NavigationBarItem(
+                                    selected = currentRoute == "library",
+                                    onClick = { navController.navigate("library") { launchSingleTop = true } },
+                                    icon = { Icon(Icons.Default.LibraryMusic, null) },
+                                    label = { Text("Library") },
+                                )
+                                NavigationBarItem(
+                                    selected = currentRoute == "stream",
+                                    onClick = { navController.navigate("stream") { launchSingleTop = true } },
+                                    icon = { Icon(Icons.Default.Search, null) },
+                                    label = { Text("Stream") },
+                                )
+                                NavigationBarItem(
+                                    selected = currentRoute == "now_playing",
+                                    onClick = { navController.navigate("now_playing") { launchSingleTop = true } },
+                                    icon = { Icon(Icons.Default.MusicNote, null) },
+                                    label = { Text("Now Playing") },
+                                )
+                            }
                         }
                     },
                 ) { innerPadding ->
@@ -152,20 +152,23 @@ class MainActivity : ComponentActivity() {
                         NavHost(navController = navController, startDestination = "library") {
                             composable("library") {
                                 LibraryScreen(onTrackClick = { tracks, index ->
-                                    // local tracks — set playback queue to the library list
-                                    MusicRepository.setPlaybackQueue(tracks)
+                                    val selectedTrack = tracks[index]
+                                    MusicRepository.addToMainBufferAndMoveToFront(selectedTrack)
                                     mediaController?.transportControls
-                                        ?.playFromMediaId(tracks[index].id, null)
+                                        ?.playFromMediaId(selectedTrack.id, null)
                                     navController.navigate("now_playing") { launchSingleTop = true }
                                 })
                             }
                             composable("stream") {
                                 StreamScreen(onTracksClick = { tracks ->
-                                    // youtube track — only update playback queue, never localTracks
-                                    MusicRepository.setPlaybackQueue(tracks)
-                                    mediaController?.transportControls
-                                        ?.playFromMediaId(tracks.first().id, null)
-                                    navController.navigate("now_playing") { launchSingleTop = true }
+                                    if (tracks.isNotEmpty()) {
+                                        val selectedTrack = tracks.first()
+                                        MusicRepository.addAllToMainBuffer(tracks)
+                                        MusicRepository.addToMainBufferAndMoveToFront(selectedTrack)
+                                        mediaController?.transportControls
+                                            ?.playFromMediaId(selectedTrack.id, null)
+                                        navController.navigate("now_playing") { launchSingleTop = true }
+                                    }
                                 })
                             }
                             composable("now_playing") {

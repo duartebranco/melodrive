@@ -1,20 +1,32 @@
 package com.melodrive.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -22,22 +34,22 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.TextButton
-import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,158 +57,343 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.melodrive.model.Track
 
 @Composable
-fun NowPlayingScreen(onBack: () -> Unit = {}, vm: NowPlayingViewModel = viewModel()) {
+fun NowPlayingScreen(
+    onBack: () -> Unit = {},
+    vm: NowPlayingViewModel = viewModel(),
+) {
     val state by vm.state.collectAsState()
-    val history by vm.history.collectAsState()
+    val buffer by vm.mainBuffer.collectAsState()
+    var expandedPlayer by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         vm.connect()
-        onDispose { /* keep connected while app is open */ }
+        onDispose { }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
+        BufferList(
+            tracks = buffer,
+            currentId = buffer.firstOrNull { it.title == state.title && it.artist == state.artist }?.id.orEmpty(),
+            onPlayTrack = vm::playFromMainBuffer,
+            onRemoveTrack = { vm.removeFromMainBuffer(it.id) },
+            onClearBuffer = vm::clearMainBuffer,
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        AnimatedVisibility(
+            visible = !expandedPlayer,
+            enter = slideInVertically(
+                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                initialOffsetY = { it },
+            ),
+            exit = slideOutVertically(
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                targetOffsetY = { it },
+            ),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            MiniPlayerCard(
+                title = state.title.ifEmpty { "nothing playing" },
+                artist = state.artist,
+                isPlaying = state.isPlaying,
+                onTogglePlayPause = vm::togglePlayPause,
+                onExpand = { expandedPlayer = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = expandedPlayer,
+            enter = slideInVertically(
+                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing),
+                initialOffsetY = { it },
+            ),
+            exit = slideOutVertically(
+                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                targetOffsetY = { it },
+            ),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            FullPlayer(
+                title = state.title.ifEmpty { "nothing playing" },
+                artist = state.artist,
+                artworkUri = state.artworkUri,
+                isPlaying = state.isPlaying,
+                positionMs = state.positionMs,
+                durationMs = state.durationMs,
+                repeatMode = state.repeatMode,
+                onCollapse = { expandedPlayer = false },
+                onClosePage = onBack,
+                onTogglePlayPause = vm::togglePlayPause,
+                onSkipPrevious = vm::skipPrevious,
+                onSkipNext = vm::skipNext,
+                onSeek = vm::seekTo,
+                onToggleRepeat = vm::toggleRepeatMode,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BufferList(
+    tracks: List<Track>,
+    currentId: String,
+    onPlayTrack: (Track) -> Unit,
+    onRemoveTrack: (Track) -> Unit,
+    onClearBuffer: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 28.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier,
+        contentPadding = PaddingValues(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 110.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            Box(Modifier.fillMaxWidth()) {
-                IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "close")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "playing buffer",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f),
+                )
+                if (tracks.isNotEmpty()) {
+                    TextButton(onClick = onClearBuffer) {
+                        Text("clear")
+                    }
                 }
             }
         }
-        item {
-            Spacer(Modifier.height(16.dp))
+
+        if (tracks.isEmpty()) {
+            item {
+                Text(
+                    text = "your playlist buffer is empty. add songs from library or stream.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+        } else {
+            items(tracks, key = { it.id }) { track ->
+                val isCurrent = track.id == currentId
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isCurrent) {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        }
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPlayTrack(track) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = track.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        IconButton(onClick = { onRemoveTrack(track) }) {
+                            Icon(Icons.Default.Close, contentDescription = "remove")
+                        }
+                    }
+                }
+            }
         }
 
         item {
-            // artwork
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center,
-            ) {
-            if (state.artworkUri != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(state.artworkUri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+}
+
+@Composable
+private fun MiniPlayerCard(
+    title: String,
+    artist: String,
+    isPlaying: Boolean,
+    onTogglePlayPause: () -> Unit,
+    onExpand: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onExpand) {
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "expand player")
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyLarge,
                 )
-            } else {
+                if (artist.isNotEmpty()) {
+                    Text(
+                        text = artist,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            IconButton(onClick = onTogglePlayPause) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = "play pause",
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullPlayer(
+    title: String,
+    artist: String,
+    artworkUri: android.net.Uri?,
+    isPlaying: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    repeatMode: Int,
+    onCollapse: () -> Unit,
+    onClosePage: () -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onSkipPrevious: () -> Unit,
+    onSkipNext: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onToggleRepeat: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 22.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onClosePage) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "close page")
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = onCollapse) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "collapse player")
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(MaterialTheme.shapes.large)
+                .background(MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (artworkUri == null) {
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
                     modifier = Modifier.size(80.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            } else {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(artworkUri)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
             }
         }
 
-        }
-        item {
-            Spacer(Modifier.height(32.dp))
-
-            // title and artist
+        Spacer(Modifier.height(18.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (artist.isNotEmpty()) {
             Text(
-                text = state.title.ifEmpty { "nothing playing" },
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                text = artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
             )
-            if (state.artist.isNotEmpty()) {
-                Text(
-                    text = state.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
         }
 
-        item {
-            Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(14.dp))
 
-            // seek bar
-            if (state.durationMs > 0) {
-                SeekBar(
-                    positionMs = state.positionMs,
-                    durationMs = state.durationMs,
-                    onSeek = vm::seekTo,
-                )
-                Spacer(Modifier.height(8.dp))
-            }
-
-            // transport controls
-            TransportControls(
-                isPlaying = state.isPlaying,
-                onTogglePlayPause = vm::togglePlayPause,
-                onSkipPrevious = vm::skipPrevious,
-                onSkipNext = vm::skipNext,
-            )
-
-            Spacer(Modifier.height(48.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Last Played", style = MaterialTheme.typography.titleMedium)
-                if (history.isNotEmpty()) {
-                    TextButton(onClick = { vm.clearHistory() }) {
-                        Text("Clear")
-                    }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            
-            if (history.isEmpty()) {
-                Text(
-                    "No recently played tracks.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 32.dp)
-                )
-            }
+        if (durationMs > 0L) {
+            SeekBar(positionMs = positionMs, durationMs = durationMs, onSeek = onSeek)
+            Spacer(Modifier.height(6.dp))
         }
-        
-        items(history, key = { it.id + it.hashCode() }) { track ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = track.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                    )
-                    Text(
-                        text = track.artist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            IconButton(onClick = onSkipPrevious, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Default.SkipPrevious, contentDescription = "previous", modifier = Modifier.size(34.dp))
+            }
+            IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(68.dp)) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = "play pause",
+                    modifier = Modifier.size(40.dp),
+                )
+            }
+            IconButton(onClick = onSkipNext, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Default.SkipNext, contentDescription = "next", modifier = Modifier.size(34.dp))
+            }
+            IconButton(onClick = onToggleRepeat) {
+                val icon = if (repeatMode == android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ONE) {
+                    Icons.Default.RepeatOne
+                } else {
+                    Icons.Default.Repeat
                 }
+                Icon(icon, contentDescription = "repeat")
             }
         }
     }
@@ -240,82 +437,6 @@ private fun SeekBar(
                 text = formatMs(durationMs),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TransportControls(
-    isPlaying: Boolean,
-    onTogglePlayPause: () -> Unit,
-    onSkipPrevious: () -> Unit,
-    onSkipNext: () -> Unit,
-) {
-    val viewModel: NowPlayingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-    val state by viewModel.state.collectAsState()
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.align(Alignment.Center),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            IconButton(onClick = onSkipPrevious, modifier = Modifier.size(56.dp)) {
-                Icon(
-                    Icons.Default.SkipPrevious,
-                    contentDescription = "previous",
-                    modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            // large play/pause button
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                IconButton(onClick = onTogglePlayPause, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "pause" else "play",
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
-            }
-
-            IconButton(onClick = onSkipNext, modifier = Modifier.size(56.dp)) {
-                Icon(
-                    Icons.Default.SkipNext,
-                    contentDescription = "next",
-                    modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-
-        IconButton(
-            onClick = { viewModel.toggleRepeatMode() },
-            modifier = Modifier.align(Alignment.CenterEnd).size(48.dp)
-        ) {
-            val icon = if (state.repeatMode == android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ONE) {
-                Icons.Default.RepeatOne
-            } else {
-                Icons.Default.Repeat
-            }
-            val tint = if (state.repeatMode == android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_NONE) {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            } else {
-                MaterialTheme.colorScheme.primary
-            }
-            Icon(
-                imageVector = icon,
-                contentDescription = "repeat",
-                modifier = Modifier.size(28.dp),
-                tint = tint,
             )
         }
     }

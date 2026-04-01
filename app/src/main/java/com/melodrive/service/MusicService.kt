@@ -128,14 +128,11 @@ class MusicService : MediaBrowserServiceCompat() {
         }
 
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
-            val track = MusicRepository.findById(mediaId ?: return) ?: return
-            val (tracks, index) = if (track.source == TrackSource.YOUTUBE) {
-                val q = MusicRepository.playbackQueue.value
-                Pair(q, q.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
-            } else {
-                val q = MusicRepository.localTracks.value
-                Pair(q, q.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
-            }
+            val trackId = mediaId ?: return
+            val tracks = MusicRepository.mainBuffer.value
+            if (tracks.isEmpty()) return
+            val index = tracks.indexOfFirst { it.id == trackId }
+            if (index < 0) return
             playQueue(tracks, index)
         }
 
