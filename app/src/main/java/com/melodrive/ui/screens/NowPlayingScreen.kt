@@ -1,5 +1,7 @@
 package com.melodrive.ui.screens
 
+import android.net.Uri
+import android.support.v4.media.session.PlaybackStateCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
@@ -34,7 +37,7 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -72,6 +75,7 @@ fun NowPlayingScreen(
     val state by vm.state.collectAsState()
     val buffer by vm.mainBuffer.collectAsState()
     var expandedPlayer by remember { mutableStateOf(false) }
+    var showClearDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         vm.connect()
@@ -84,7 +88,7 @@ fun NowPlayingScreen(
             currentId = buffer.firstOrNull { it.title == state.title && it.artist == state.artist }?.id.orEmpty(),
             onPlayTrack = vm::playFromMainBuffer,
             onRemoveTrack = { vm.removeFromMainBuffer(it.id) },
-            onClearBuffer = vm::clearMainBuffer,
+            onClearBuffer = { showClearDialog = true },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -101,10 +105,12 @@ fun NowPlayingScreen(
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             MiniPlayerCard(
-                title = state.title.ifEmpty { "nothing playing" },
+                title = state.title.ifEmpty { "Nothing Playing" },
                 artist = state.artist,
                 isPlaying = state.isPlaying,
+                onSkipPrevious = vm::skipPrevious,
                 onTogglePlayPause = vm::togglePlayPause,
+                onSkipNext = vm::skipNext,
                 onExpand = { expandedPlayer = true },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -125,7 +131,7 @@ fun NowPlayingScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             FullPlayer(
-                title = state.title.ifEmpty { "nothing playing" },
+                title = state.title.ifEmpty { "Nothing Playing" },
                 artist = state.artist,
                 artworkUri = state.artworkUri,
                 isPlaying = state.isPlaying,
@@ -133,7 +139,6 @@ fun NowPlayingScreen(
                 durationMs = state.durationMs,
                 repeatMode = state.repeatMode,
                 onCollapse = { expandedPlayer = false },
-                onClosePage = onBack,
                 onTogglePlayPause = vm::togglePlayPause,
                 onSkipPrevious = vm::skipPrevious,
                 onSkipNext = vm::skipNext,
@@ -142,6 +147,29 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background),
+            )
+        }
+
+        if (showClearDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearDialog = false },
+                title = { Text("Clear Buffer") },
+                text = { Text("Are you sure you want to remove all tracks from the Playing Buffer?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            vm.clearMainBuffer()
+                            showClearDialog = false
+                        },
+                    ) {
+                        Text("Clear")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearDialog = false }) {
+                        Text("Cancel")
+                    }
+                },
             )
         }
     }
@@ -158,23 +186,25 @@ private fun BufferList(
 ) {
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "playing buffer",
+                    text = "Playing Buffer",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f),
                 )
                 if (tracks.isNotEmpty()) {
                     TextButton(onClick = onClearBuffer) {
-                        Text("clear")
+                        Text("Clear")
                     }
                 }
             }
@@ -183,7 +213,7 @@ private fun BufferList(
         if (tracks.isEmpty()) {
             item {
                 Text(
-                    text = "your playlist buffer is empty. add songs from library or stream.",
+                    text = "Your playlist buffer is empty. Add songs from Library or Stream.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 16.dp),
@@ -198,7 +228,7 @@ private fun BufferList(
                             MaterialTheme.colorScheme.surfaceVariant
                         } else {
                             MaterialTheme.colorScheme.surface
-                        }
+                        },
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -218,7 +248,7 @@ private fun BufferList(
                         )
                         Spacer(Modifier.size(8.dp))
                         IconButton(onClick = { onRemoveTrack(track) }) {
-                            Icon(Icons.Default.Close, contentDescription = "remove")
+                            Icon(Icons.Default.Close, contentDescription = "Remove")
                         }
                     }
                 }
@@ -236,12 +266,14 @@ private fun MiniPlayerCard(
     title: String,
     artist: String,
     isPlaying: Boolean,
+    onSkipPrevious: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.clickable { onExpand() },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Row(
@@ -250,10 +282,6 @@ private fun MiniPlayerCard(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onExpand) {
-                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "expand player")
-            }
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -272,11 +300,20 @@ private fun MiniPlayerCard(
                 }
             }
 
+            IconButton(onClick = onSkipPrevious) {
+                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
+            }
             IconButton(onClick = onTogglePlayPause) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = "play pause",
+                    contentDescription = "Play Pause",
                 )
+            }
+            IconButton(onClick = onSkipNext) {
+                Icon(Icons.Default.SkipNext, contentDescription = "Next")
+            }
+            IconButton(onClick = onExpand) {
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Expand Player")
             }
         }
     }
@@ -286,13 +323,12 @@ private fun MiniPlayerCard(
 private fun FullPlayer(
     title: String,
     artist: String,
-    artworkUri: android.net.Uri?,
+    artworkUri: Uri?,
     isPlaying: Boolean,
     positionMs: Long,
     durationMs: Long,
     repeatMode: Int,
     onCollapse: () -> Unit,
-    onClosePage: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
@@ -308,12 +344,9 @@ private fun FullPlayer(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClosePage) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "close page")
-            }
             Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = onCollapse) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "collapse player")
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse Player")
             }
         }
 
@@ -375,25 +408,25 @@ private fun FullPlayer(
             horizontalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             IconButton(onClick = onSkipPrevious, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Default.SkipPrevious, contentDescription = "previous", modifier = Modifier.size(34.dp))
+                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(34.dp))
             }
             IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(68.dp)) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = "play pause",
+                    contentDescription = "Play Pause",
                     modifier = Modifier.size(40.dp),
                 )
             }
             IconButton(onClick = onSkipNext, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Default.SkipNext, contentDescription = "next", modifier = Modifier.size(34.dp))
+                Icon(Icons.Default.SkipNext, contentDescription = "Next", modifier = Modifier.size(34.dp))
             }
             IconButton(onClick = onToggleRepeat) {
-                val icon = if (repeatMode == android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ONE) {
+                val icon = if (repeatMode == PlaybackStateCompat.REPEAT_MODE_ONE) {
                     Icons.Default.RepeatOne
                 } else {
                     Icons.Default.Repeat
                 }
-                Icon(icon, contentDescription = "repeat")
+                Icon(icon, contentDescription = "Repeat")
             }
         }
     }
