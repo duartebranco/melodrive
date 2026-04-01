@@ -39,15 +39,19 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.melodrive.model.Track
 import com.melodrive.model.TrackSource
-import com.melodrive.youtube.SearchViewModel
+import com.melodrive.youtube.StreamViewModel
 import com.melodrive.youtube.YtSearchResult
+import com.melodrive.youtube.ResultType
+import com.melodrive.youtube.YtDlpWrapper
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import android.net.Uri
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 
 @Composable
-fun SearchScreen(
-    onTrackClick: (Track) -> Unit,
-    vm: SearchViewModel = viewModel(),
+fun StreamScreen(
+    onTracksClick: (List<Track>) -> Unit,
+    vm: StreamViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
 
@@ -81,8 +85,20 @@ fun SearchScreen(
             state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
-            state.results.isEmpty() && state.query.isNotEmpty() -> EmptyResultsHint()
-            else -> ResultList(results = state.results, onTrackClick = onTrackClick)
+
+            state.results.isEmpty() && state.query.isNotEmpty() -> EmptyResultsHint("no results")
+            state.results.isEmpty() && state.query.isEmpty() -> EmptyResultsHint("Never streamed")
+            else -> {
+                if (state.query.isEmpty()) {
+                    Text(
+                        text = "Last played",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                ResultList(results = state.results, onTracksClick = onTracksClick, vm = vm)
+            }
         }
     }
 }
@@ -90,14 +106,33 @@ fun SearchScreen(
 @Composable
 private fun ResultList(
     results: List<YtSearchResult>,
-    onTrackClick: (Track) -> Unit,
+    onTracksClick: (List<Track>) -> Unit,
+    vm: StreamViewModel,
 ) {
-    LazyColumn {
-        items(results, key = { it.videoId }) { result ->
+    val scope = rememberCoroutineScope()
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(results) { result ->
             ResultRow(
                 result = result,
                 onClick = {
-                    onTrackClick(result.toTrack())
+                    vm.addToHistory(listOf(result))
+                    if (result.type == ResultType.SONG) {
+                        onTracksClick(listOf(result.toTrack()))
+                    } else if (result.type == ResultType.ALBUM) {
+                        scope.launch {
+                            val songs = YtDlpWrapper.getAlbumSongs(result.videoId)
+                            if (songs.isNotEmpty()) {
+                                onTracksClick(songs.map { it.toTrack() })
+                            }
+                        }
+                    } else if (result.type == ResultType.ARTIST) {
+                        scope.launch {
+                            val songs = YtDlpWrapper.getArtistSongs(result.videoId)
+                            if (songs.isNotEmpty()) {
+                                onTracksClick(songs.shuffled().map { it.toTrack() })
+                            }
+                        }
+                    }
                 },
             )
         }
@@ -134,8 +169,13 @@ private fun ResultRow(result: YtSearchResult, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
             )
+            val prefix = when (result.type) {
+                ResultType.ALBUM -> "Album • "
+                ResultType.ARTIST -> "Artist • "
+                else -> ""
+            }
             Text(
-                text = result.artist,
+                text = prefix + result.artist,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -167,10 +207,10 @@ private fun ErrorHint(message: String) {
 }
 
 @Composable
-private fun EmptyResultsHint() {
+private fun EmptyResultsHint(message: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
-            text = "no results",
+            text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

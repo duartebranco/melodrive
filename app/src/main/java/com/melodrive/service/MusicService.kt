@@ -55,6 +55,34 @@ class MusicService : MediaBrowserServiceCompat() {
         notificationManager = MediaNotificationManager(this)
 
         serviceScope.launch { MusicRepository.loadFromStoredFolder(this@MusicService) }
+
+        serviceScope.launch {
+            MusicRepository.mainBuffer.collect { buffer ->
+                if (buffer.isEmpty()) {
+                    queue = emptyList()
+                    player.clearMediaItems()
+                    player.stop()
+                } else if (queue.isNotEmpty()) {
+                    val bufferIds = buffer.map { it.id }.toSet()
+                    val toRemoveIndices = mutableListOf<Int>()
+                    for (i in queue.indices.reversed()) {
+                        if (queue[i].id !in bufferIds) {
+                            toRemoveIndices.add(i)
+                        }
+                    }
+                    if (toRemoveIndices.isNotEmpty()) {
+                        val newQueue = queue.toMutableList()
+                        toRemoveIndices.forEach { index ->
+                            if (index < player.mediaItemCount) {
+                                player.removeMediaItem(index)
+                            }
+                            newQueue.removeAt(index)
+                        }
+                        queue = newQueue
+                    }
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
@@ -128,14 +156,11 @@ class MusicService : MediaBrowserServiceCompat() {
         }
 
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
-            val track = MusicRepository.findById(mediaId ?: return) ?: return
-            val (tracks, index) = if (track.source == TrackSource.YOUTUBE) {
-                val q = MusicRepository.playbackQueue.value
-                Pair(q, q.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
-            } else {
-                val q = MusicRepository.localTracks.value
-                Pair(q, q.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
-            }
+            val trackId = mediaId ?: return
+            val tracks = MusicRepository.mainBuffer.value
+            if (tracks.isEmpty()) return
+            val index = tracks.indexOfFirst { it.id == trackId }
+            if (index < 0) return
             playQueue(tracks, index)
         }
 
@@ -163,7 +188,9 @@ class MusicService : MediaBrowserServiceCompat() {
             player.setMediaItems(items, startIndex, 0L)
             player.prepare()
             player.play()
-            updateMetadata(tracks[startIndex])
+            val track = tracks[startIndex]
+            updateMetadata(track)
+            MusicRepository.addToHistory(track)
         }
     }
 
@@ -199,7 +226,12 @@ class MusicService : MediaBrowserServiceCompat() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            queue.getOrNull(player.currentMediaItemIndex)?.let { updateMetadata(it) }
+            queue.getOrNull(player.currentMediaItemIndex)?.let { track ->
+                updateMetadata(track)
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
+                    MusicRepository.addToHistory(track)
+                }
+            }
         }
     }
 
