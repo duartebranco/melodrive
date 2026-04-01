@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -22,17 +24,20 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -48,35 +53,66 @@ import kotlinx.coroutines.launch
 import android.net.Uri
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StreamScreen(
     onTracksClick: (List<Track>) -> Unit,
     vm: StreamViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
+    val searchInteraction = remember { MutableInteractionSource() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedTextField(
+            Text(
+                text = "Stream",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.width(12.dp))
+            BasicTextField(
                 value = state.query,
                 onValueChange = vm::onQueryChange,
-                placeholder = { Text("artist or song name") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { vm.search() }),
+                keyboardActions = KeyboardActions(onSearch = { if (!state.loading) vm.search() }),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                ),
+                interactionSource = searchInteraction,
                 modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = vm::search,
-                enabled = !state.loading,
-            ) {
-                Icon(Icons.Default.Search, contentDescription = "search")
+            ) { innerTextField ->
+                OutlinedTextFieldDefaults.DecorationBox(
+                    value = state.query,
+                    innerTextField = innerTextField,
+                    enabled = true,
+                    singleLine = true,
+                    visualTransformation = VisualTransformation.None,
+                    interactionSource = searchInteraction,
+                    placeholder = { Text("artist or song name") },
+                    trailingIcon = {
+                        IconButton(onClick = vm::search, enabled = !state.loading) {
+                            Icon(Icons.Default.Search, contentDescription = "search")
+                        }
+                    },
+                    contentPadding = OutlinedTextFieldDefaults.contentPadding(
+                        top = 10.dp,
+                        bottom = 10.dp,
+                    ),
+                    container = {
+                        OutlinedTextFieldDefaults.ContainerBox(
+                            enabled = true,
+                            isError = false,
+                            interactionSource = searchInteraction,
+                            colors = OutlinedTextFieldDefaults.colors(),
+                        )
+                    },
+                )
             }
         }
 
@@ -94,7 +130,7 @@ fun StreamScreen(
                         text = "Last played",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                     )
                 }
                 ResultList(results = state.results, onTracksClick = onTracksClick, vm = vm)
