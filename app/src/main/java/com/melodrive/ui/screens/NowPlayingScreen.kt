@@ -80,25 +80,40 @@ fun NowPlayingScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Playing Buffer",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                if (buffer.isNotEmpty()) {
+                    TextButton(onClick = { showClearDialog = true }) {
+                        Text("Clear")
+                    }
+                }
+            }
             BufferList(
                 tracks = buffer,
                 currentId = buffer.firstOrNull { it.title == state.title && it.artist == state.artist }?.id.orEmpty(),
                 onPlayTrack = vm::playFromMainBuffer,
                 onRemoveTrack = { vm.removeFromMainBuffer(it.id) },
-                onClearBuffer = { showClearDialog = true },
                 modifier = Modifier.weight(1f),
             )
-            if (state.title.isNotEmpty()) {
-                MiniPlayer(
-                    title = state.title,
-                    artist = state.artist,
-                    isPlaying = state.isPlaying,
-                    onSkipPrevious = vm::skipPrevious,
-                    onTogglePlayPause = vm::togglePlayPause,
-                    onSkipNext = vm::skipNext,
-                    onExpand = { expandedPlayer = true },
-                )
-            }
+            MiniPlayer(
+                title = state.title.ifEmpty { "Nothing Playing" },
+                artist = state.artist,
+                isPlaying = state.isPlaying,
+                onSkipPrevious = vm::skipPrevious,
+                onTogglePlayPause = vm::togglePlayPause,
+                onSkipNext = vm::skipNext,
+                onExpand = { expandedPlayer = true },
+            )
         }
 
         AnimatedVisibility(
@@ -164,31 +179,9 @@ private fun BufferList(
     currentId: String,
     onPlayTrack: (Track) -> Unit,
     onRemoveTrack: (Track) -> Unit,
-    onClearBuffer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Playing Buffer",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f),
-                )
-                if (tracks.isNotEmpty()) {
-                    TextButton(onClick = onClearBuffer) {
-                        Text("Clear")
-                    }
-                }
-            }
-        }
-
         if (tracks.isEmpty()) {
             item {
                 Text(
