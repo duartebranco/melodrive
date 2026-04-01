@@ -102,7 +102,7 @@ fun NowPlayingScreen(
             }
             BufferList(
                 tracks = buffer,
-                currentId = buffer.firstOrNull { it.title == state.title && it.artist == state.artist }?.id.orEmpty(),
+                currentId = state.currentTrackId,
                 onPlayTrack = vm::playFromMainBuffer,
                 onRemoveTrack = { vm.removeFromMainBuffer(it.id) },
                 modifier = Modifier.weight(1f),

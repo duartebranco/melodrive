@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class NowPlayingState(
+    val currentTrackId: String = "",
     val title: String = "",
     val artist: String = "",
     val artworkUri: Uri? = null,
@@ -66,6 +67,7 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
         override fun onMetadataChanged(metadata: MediaMetadataCompat?) {
             metadata ?: return
             _state.value = _state.value.copy(
+                currentTrackId = metadata.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID) ?: "",
                 title = metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE) ?: "",
                 artist = metadata.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: "",
                 artworkUri = metadata.description.iconUri,
@@ -119,8 +121,8 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
         val removeIndex = current.indexOfFirst { it.id == trackId }
         if (removeIndex < 0) return
 
-        val isCurrentTrack = state.value.connected && state.value.title.isNotEmpty() &&
-                current.getOrNull(removeIndex)?.title == state.value.title
+        val isCurrentTrack = state.value.connected && state.value.currentTrackId.isNotEmpty() &&
+                current.getOrNull(removeIndex)?.id == state.value.currentTrackId
 
         val updated = MusicRepository.removeFromMainBuffer(trackId)
 
