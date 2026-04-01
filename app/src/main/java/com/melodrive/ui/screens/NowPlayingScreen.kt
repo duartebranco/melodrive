@@ -187,8 +187,7 @@ private fun BufferList(
 ) {
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(top = 16.dp, bottom = 110.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 110.dp),
     ) {
         item {
             Row(
@@ -227,7 +226,7 @@ private fun BufferList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onPlayTrack(track) }
-                        .background(if (isCurrent) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.background)
+                        .then(if (isCurrent) Modifier.background(MaterialTheme.colorScheme.surfaceVariant) else Modifier)
                         .padding(horizontal = 20.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

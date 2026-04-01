@@ -59,9 +59,15 @@ fun StreamScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Text(
+                text = "Stream",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.width(12.dp))
             OutlinedTextField(
                 value = state.query,
                 onValueChange = vm::onQueryChange,
@@ -69,15 +75,13 @@ fun StreamScreen(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { vm.search() }),
+                trailingIcon = {
+                    IconButton(onClick = vm::search, enabled = !state.loading) {
+                        Icon(Icons.Default.Search, contentDescription = "search")
+                    }
+                },
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = vm::search,
-                enabled = !state.loading,
-            ) {
-                Icon(Icons.Default.Search, contentDescription = "search")
-            }
         }
 
         when {
@@ -94,7 +98,7 @@ fun StreamScreen(
                         text = "Last played",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                     )
                 }
                 ResultList(results = state.results, onTracksClick = onTracksClick, vm = vm)
