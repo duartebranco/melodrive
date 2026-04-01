@@ -168,8 +168,7 @@ private fun AlbumRow(album: Album, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
             Text(
                 text = buildString {
-                    if (album.artist.isNotEmpty()) append(album.artist)
-                    if (album.artist.isNotEmpty()) append(" · ")
+                    if (album.artist.isNotEmpty()) append("${album.artist} · ")
                     append("${album.tracks.size} songs")
                 },
                 style = MaterialTheme.typography.bodyMedium,
