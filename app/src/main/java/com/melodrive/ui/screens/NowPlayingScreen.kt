@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -158,7 +159,7 @@ fun NowPlayingScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            vm.clearMainBuffer()
+                            buffer.forEach { vm.removeFromMainBuffer(it.id) }
                             showClearDialog = false
                         },
                     ) {
@@ -186,14 +187,14 @@ private fun BufferList(
 ) {
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -216,40 +217,61 @@ private fun BufferList(
                     text = "Your playlist buffer is empty. Add songs from Library or Stream.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 16.dp),
+                    modifier = Modifier.padding(top = 16.dp, start = 20.dp, end = 20.dp),
                 )
             }
         } else {
             items(tracks, key = { it.id }) { track ->
                 val isCurrent = track.id == currentId
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isCurrent) {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.surface
-                        },
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPlayTrack(track) }
+                        .background(if (isCurrent) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.background)
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPlayTrack(track) }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    if (track.artworkUri != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(track.artworkUri)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(48.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp).padding(8.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = track.title,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
                         )
-                        Spacer(Modifier.size(8.dp))
-                        IconButton(onClick = { onRemoveTrack(track) }) {
-                            Icon(Icons.Default.Close, contentDescription = "Remove")
+                        if (track.artist.isNotEmpty()) {
+                            Text(
+                                text = track.artist,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = { onRemoveTrack(track) }) {
+                        Icon(Icons.Default.Close, contentDescription = "Remove")
                     }
                 }
             }
@@ -282,6 +304,9 @@ private fun MiniPlayerCard(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(onClick = onExpand) {
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Expand Player")
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -312,9 +337,6 @@ private fun MiniPlayerCard(
             IconButton(onClick = onSkipNext) {
                 Icon(Icons.Default.SkipNext, contentDescription = "Next")
             }
-            IconButton(onClick = onExpand) {
-                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Expand Player")
-            }
         }
     }
 }
@@ -344,10 +366,10 @@ private fun FullPlayer(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = onCollapse) {
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse Player")
             }
+            Spacer(modifier = Modifier.weight(1f))
         }
 
         Box(

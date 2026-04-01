@@ -55,6 +55,34 @@ class MusicService : MediaBrowserServiceCompat() {
         notificationManager = MediaNotificationManager(this)
 
         serviceScope.launch { MusicRepository.loadFromStoredFolder(this@MusicService) }
+
+        serviceScope.launch {
+            MusicRepository.mainBuffer.collect { buffer ->
+                if (buffer.isEmpty()) {
+                    queue = emptyList()
+                    player.clearMediaItems()
+                    player.stop()
+                } else if (queue.isNotEmpty()) {
+                    val bufferIds = buffer.map { it.id }.toSet()
+                    val toRemoveIndices = mutableListOf<Int>()
+                    for (i in queue.indices.reversed()) {
+                        if (queue[i].id !in bufferIds) {
+                            toRemoveIndices.add(i)
+                        }
+                    }
+                    if (toRemoveIndices.isNotEmpty()) {
+                        val newQueue = queue.toMutableList()
+                        toRemoveIndices.forEach { index ->
+                            if (index < player.mediaItemCount) {
+                                player.removeMediaItem(index)
+                            }
+                            newQueue.removeAt(index)
+                        }
+                        queue = newQueue
+                    }
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
