@@ -2,8 +2,13 @@ package com.melodrive.youtube
 
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.ServiceList.YouTube
+import org.schabi.newpipe.extractor.channel.ChannelInfo
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabInfo
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabs
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
@@ -25,64 +30,42 @@ data class YtSearchResult(
 
 object YtDlpWrapper {
 
-    // searches YouTube Music for songs, albums, and artists
+    // Searches YouTube Music for songs, albums, and artists in parallel.
+    // NewPipeExtractor only honours the first content filter per query, so we
+    // run three separate searches and interleave the results.
     suspend fun search(query: String, maxResults: Int = 20): List<YtSearchResult> =
         withContext(Dispatchers.IO) {
-            try {
-                val handler = YouTube.searchQHFactory.fromQuery(
-                    query,
-                    listOf(
-                        YoutubeSearchQueryHandlerFactory.MUSIC_SONGS,
-                        YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS,
-                        YoutubeSearchQueryHandlerFactory.MUSIC_ARTISTS,
-                    ),
-                    "",
-                )
-                SearchInfo.getInfo(YouTube, handler).relatedItems
-                    .mapNotNull { item ->
-                        when (item) {
-                            is StreamInfoItem -> item.toResult(ResultType.SONG)
-                            is org.schabi.newpipe.extractor.playlist.PlaylistInfoItem -> YtSearchResult(
-                                videoId = item.url,
-                                title = item.name,
-                                artist = item.uploaderName ?: "",
-                                thumbnailUrl = item.thumbnails.firstOrNull()?.url ?: "",
-                                durationSeconds = 0,
-                                type = ResultType.ALBUM,
-                            )
-                            is org.schabi.newpipe.extractor.channel.ChannelInfoItem -> YtSearchResult(
-                                videoId = item.url,
-                                title = item.name,
-                                artist = "",
-                                thumbnailUrl = item.thumbnails.firstOrNull()?.url ?: "",
-                                durationSeconds = 0,
-                                type = ResultType.ARTIST,
-                            )
-                            else -> null
-                        }
-                    }
-                    .take(maxResults)
-            } catch (_: Exception) {
-                emptyList()
+            coroutineScope {
+                val songsJob = async {
+                    searchByFilter(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS, ResultType.SONG)
+                }
+                val albumsJob = async {
+                    searchByFilter(query, YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS, ResultType.ALBUM)
+                }
+                val artistsJob = async {
+                    searchByFilter(query, YoutubeSearchQueryHandlerFactory.MUSIC_ARTISTS, ResultType.ARTIST)
+                }
+
+                val songs = songsJob.await()
+                val albums = albumsJob.await()
+                val artists = artistsJob.await()
+
+                // Interleave: songs get half the quota, albums and artists split the rest.
+                val songCount = maxResults / 2
+                val sideCount = maxResults / 4
+                buildList {
+                    addAll(songs.take(songCount))
+                    addAll(albums.take(sideCount))
+                    addAll(artists.take(sideCount))
+                }
             }
         }
 
-    // searches YouTube Music for songs only
+    // Searches for songs only — used as a fallback inside getArtistSongs().
     suspend fun searchSongs(query: String, maxResults: Int = 20): List<YtSearchResult> =
         withContext(Dispatchers.IO) {
-            try {
-                val handler = YouTube.searchQHFactory.fromQuery(
-                    query,
-                    listOf(YoutubeSearchQueryHandlerFactory.MUSIC_SONGS),
-                    "",
-                )
-                SearchInfo.getInfo(YouTube, handler).relatedItems
-                    .filterIsInstance<StreamInfoItem>()
-                    .mapNotNull { it.toResult(ResultType.SONG) }
-                    .take(maxResults)
-            } catch (_: Exception) {
-                emptyList()
-            }
+            searchByFilter(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS, ResultType.SONG)
+                .take(maxResults)
         }
 
     suspend fun getAlbumSongs(url: String): List<YtSearchResult> =
@@ -97,17 +80,36 @@ object YtDlpWrapper {
             }
         }
 
+    // Browses the artist's own channel tabs (TRACKS first, then VIDEOS) so we
+    // get their actual library instead of a generic name search.
     suspend fun getArtistSongs(url: String): List<YtSearchResult> =
         withContext(Dispatchers.IO) {
             try {
-                val info = org.schabi.newpipe.extractor.channel.ChannelInfo.getInfo(YouTube, url)
-                searchSongs(info.name, 50)
+                val info = ChannelInfo.getInfo(YouTube, url)
+
+                // Prefer the dedicated tracks/songs tab; fall back to videos.
+                val tab = info.tabs.firstOrNull { tab ->
+                    tab.contentFilters.contains(ChannelTabs.TRACKS)
+                } ?: info.tabs.firstOrNull { tab ->
+                    tab.contentFilters.contains(ChannelTabs.VIDEOS)
+                }
+
+                if (tab != null) {
+                    ChannelTabInfo.getInfo(YouTube, tab)
+                        .relatedItems
+                        .filterIsInstance<StreamInfoItem>()
+                        .mapNotNull { it.toResult(ResultType.SONG) }
+                        .take(50)
+                } else {
+                    // Last resort: search by artist name.
+                    searchSongs(info.name, 50)
+                }
             } catch (_: Exception) {
                 emptyList()
             }
         }
 
-    // resolves a video id to a direct audio stream url
+    // Resolves a video ID to a direct audio stream URL.
     suspend fun resolveStreamUrl(videoId: String): Uri? =
         withContext(Dispatchers.IO) {
             val urls = listOf(
@@ -126,6 +128,39 @@ object YtDlpWrapper {
                 }
             }
             null
+        }
+
+    // Runs a single-type YouTube Music search on the calling (IO) thread.
+    private fun searchByFilter(query: String, filter: String, type: ResultType): List<YtSearchResult> =
+        try {
+            val handler = YouTube.searchQHFactory.fromQuery(query, listOf(filter), "")
+            SearchInfo.getInfo(YouTube, handler).relatedItems.mapNotNull { item ->
+                when (type) {
+                    ResultType.SONG -> (item as? StreamInfoItem)?.toResult(ResultType.SONG)
+                    ResultType.ALBUM -> (item as? org.schabi.newpipe.extractor.playlist.PlaylistInfoItem)?.let {
+                        YtSearchResult(
+                            videoId = it.url,
+                            title = it.name,
+                            artist = it.uploaderName ?: "",
+                            thumbnailUrl = it.thumbnails.firstOrNull()?.url ?: "",
+                            durationSeconds = 0,
+                            type = ResultType.ALBUM,
+                        )
+                    }
+                    ResultType.ARTIST -> (item as? org.schabi.newpipe.extractor.channel.ChannelInfoItem)?.let {
+                        YtSearchResult(
+                            videoId = it.url,
+                            title = it.name,
+                            artist = "",
+                            thumbnailUrl = it.thumbnails.firstOrNull()?.url ?: "",
+                            durationSeconds = 0,
+                            type = ResultType.ARTIST,
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
         }
 
     private fun StreamInfoItem.toResult(type: ResultType): YtSearchResult? {
