@@ -79,23 +79,12 @@ fun LibraryScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Library",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (state.folderUri != null) {
-                    val folderName = Uri.decode(state.folderUri?.lastPathSegment?.substringAfterLast(':') ?: "Unknown")
-                    Text(
-                        text = folderName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
+            Text(
+                text = "Library",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
             TextButton(onClick = { folderPicker.launch(null) }) {
                 Icon(
                     Icons.Default.FolderOpen, contentDescription = null,
@@ -107,6 +96,18 @@ fun LibraryScreen(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
+        }
+
+        if (state.folderUri != null) {
+            val folderName = Uri.decode(state.folderUri?.lastPathSegment?.substringAfterLast(':') ?: "Unknown")
+            Text(
+                text = "/$folderName",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp)
+            )
         }
 
         when {
