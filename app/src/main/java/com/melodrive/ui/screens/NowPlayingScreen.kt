@@ -12,19 +12,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -39,14 +35,13 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -84,39 +79,26 @@ fun NowPlayingScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        BufferList(
-            tracks = buffer,
-            currentId = buffer.firstOrNull { it.title == state.title && it.artist == state.artist }?.id.orEmpty(),
-            onPlayTrack = vm::playFromMainBuffer,
-            onRemoveTrack = { vm.removeFromMainBuffer(it.id) },
-            onClearBuffer = { showClearDialog = true },
-            modifier = Modifier.fillMaxSize(),
-        )
-
-        AnimatedVisibility(
-            visible = !expandedPlayer,
-            enter = slideInVertically(
-                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-                initialOffsetY = { it },
-            ),
-            exit = slideOutVertically(
-                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-                targetOffsetY = { it },
-            ),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            MiniPlayerCard(
-                title = state.title.ifEmpty { "Nothing Playing" },
-                artist = state.artist,
-                isPlaying = state.isPlaying,
-                onSkipPrevious = vm::skipPrevious,
-                onTogglePlayPause = vm::togglePlayPause,
-                onSkipNext = vm::skipNext,
-                onExpand = { expandedPlayer = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+        Column(modifier = Modifier.fillMaxSize()) {
+            BufferList(
+                tracks = buffer,
+                currentId = buffer.firstOrNull { it.title == state.title && it.artist == state.artist }?.id.orEmpty(),
+                onPlayTrack = vm::playFromMainBuffer,
+                onRemoveTrack = { vm.removeFromMainBuffer(it.id) },
+                onClearBuffer = { showClearDialog = true },
+                modifier = Modifier.weight(1f),
             )
+            if (state.title.isNotEmpty()) {
+                MiniPlayer(
+                    title = state.title,
+                    artist = state.artist,
+                    isPlaying = state.isPlaying,
+                    onSkipPrevious = vm::skipPrevious,
+                    onTogglePlayPause = vm::togglePlayPause,
+                    onSkipNext = vm::skipNext,
+                    onExpand = { expandedPlayer = true },
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -185,10 +167,7 @@ private fun BufferList(
     onClearBuffer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(bottom = 110.dp),
-    ) {
+    LazyColumn(modifier = modifier) {
         item {
             Row(
                 modifier = Modifier
@@ -276,14 +255,11 @@ private fun BufferList(
             }
         }
 
-        item {
-            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
-        }
     }
 }
 
 @Composable
-private fun MiniPlayerCard(
+private fun MiniPlayer(
     title: String,
     artist: String,
     isPlaying: Boolean,
@@ -291,16 +267,15 @@ private fun MiniPlayerCard(
     onTogglePlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onExpand: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier.clickable { onExpand() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth().clickable { onExpand() },
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onExpand) {
@@ -323,7 +298,6 @@ private fun MiniPlayerCard(
                     )
                 }
             }
-
             IconButton(onClick = onSkipPrevious) {
                 Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
             }
