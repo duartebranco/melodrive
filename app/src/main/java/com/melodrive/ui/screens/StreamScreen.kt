@@ -81,13 +81,13 @@ fun StreamScreen(
         }
 
         when {
-            state.error != null -> ErrorHint(state.error!!)
+            state.error != null -> Hint(state.error!!, isError = true)
             state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
 
-            state.results.isEmpty() && state.query.isNotEmpty() -> EmptyResultsHint("no results")
-            state.results.isEmpty() && state.query.isEmpty() -> EmptyResultsHint("Never streamed")
+            state.results.isEmpty() && state.query.isNotEmpty() -> Hint("no results")
+            state.results.isEmpty() && state.query.isEmpty() -> Hint("never streamed")
             else -> {
                 if (state.query.isEmpty()) {
                     Text(
@@ -195,24 +195,13 @@ private fun YtSearchResult.toTrack() = Track(
 )
 
 @Composable
-private fun ErrorHint(message: String) {
+private fun Hint(message: String, isError: Boolean = false) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
+            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(24.dp),
-        )
-    }
-}
-
-@Composable
-private fun EmptyResultsHint(message: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
