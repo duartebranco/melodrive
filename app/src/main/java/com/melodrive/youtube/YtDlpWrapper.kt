@@ -39,7 +39,6 @@ object YtDlpWrapper {
                     "",
                 )
                 SearchInfo.getInfo(YouTube, handler).relatedItems
-                    .take(maxResults)
                     .mapNotNull { item ->
                         when (item) {
                             is StreamInfoItem -> item.toResult(ResultType.SONG)
@@ -62,6 +61,7 @@ object YtDlpWrapper {
                             else -> null
                         }
                     }
+                    .take(maxResults)
             } catch (_: Exception) {
                 emptyList()
             }
@@ -78,8 +78,8 @@ object YtDlpWrapper {
                 )
                 SearchInfo.getInfo(YouTube, handler).relatedItems
                     .filterIsInstance<StreamInfoItem>()
-                    .take(maxResults)
                     .mapNotNull { it.toResult(ResultType.SONG) }
+                    .take(maxResults)
             } catch (_: Exception) {
                 emptyList()
             }
@@ -116,10 +116,10 @@ object YtDlpWrapper {
             )
             for (url in urls) {
                 try {
-                    val best = StreamInfo.getInfo(YouTube, url).audioStreams
-                        .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+                    val streams = StreamInfo.getInfo(YouTube, url).audioStreams
+                    val best = streams.filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
                         .maxByOrNull { it.averageBitrate }
-                        ?: StreamInfo.getInfo(YouTube, url).audioStreams.firstOrNull()
+                        ?: streams.firstOrNull()
                     if (best?.content != null) return@withContext Uri.parse(best.content)
                 } catch (_: Exception) {
                     // try next url

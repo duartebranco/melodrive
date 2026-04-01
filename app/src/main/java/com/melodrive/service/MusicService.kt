@@ -201,8 +201,8 @@ class MusicService : MediaBrowserServiceCompat() {
         override fun onRepeatModeChanged(repeatMode: Int) {
             mediaSession.setRepeatMode(
                 when (repeatMode) {
-                    androidx.media3.common.Player.REPEAT_MODE_ONE -> PlaybackStateCompat.REPEAT_MODE_ONE
-                    androidx.media3.common.Player.REPEAT_MODE_ALL -> PlaybackStateCompat.REPEAT_MODE_ALL
+                    REPEAT_MODE_ONE -> PlaybackStateCompat.REPEAT_MODE_ONE
+                    REPEAT_MODE_ALL -> PlaybackStateCompat.REPEAT_MODE_ALL
                     else -> PlaybackStateCompat.REPEAT_MODE_NONE
                 }
             )
