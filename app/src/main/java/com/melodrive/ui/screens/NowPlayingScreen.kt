@@ -159,7 +159,7 @@ fun NowPlayingScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            buffer.forEach { vm.removeFromMainBuffer(it.id) }
+                            vm.clearMainBuffer()
                             showClearDialog = false
                         },
                     ) {

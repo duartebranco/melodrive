@@ -112,6 +112,7 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearMainBuffer() {
         MusicRepository.clearMainBuffer()
+        if (state.value.isPlaying) controller?.transportControls?.pause()
     }
 
     fun removeFromMainBuffer(trackId: String) {
