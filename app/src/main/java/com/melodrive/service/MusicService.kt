@@ -13,6 +13,9 @@ import androidx.media.MediaBrowserServiceCompat
 import androidx.media.session.MediaButtonReceiver
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Player.REPEAT_MODE_ALL
+import androidx.media3.common.Player.REPEAT_MODE_OFF
+import androidx.media3.common.Player.REPEAT_MODE_ONE
 import androidx.media3.exoplayer.ExoPlayer
 import com.melodrive.library.ArtworkLoader
 import com.melodrive.model.Track
@@ -149,9 +152,9 @@ class MusicService : MediaBrowserServiceCompat() {
         override fun onSeekTo(pos: Long) = player.seekTo(pos)
         override fun onSetRepeatMode(repeatMode: Int) {
             player.repeatMode = when (repeatMode) {
-                android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ONE -> androidx.media3.common.Player.REPEAT_MODE_ONE
-                android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ALL
-                else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+                PlaybackStateCompat.REPEAT_MODE_ONE -> REPEAT_MODE_ONE
+                PlaybackStateCompat.REPEAT_MODE_ALL -> REPEAT_MODE_ALL
+                else -> REPEAT_MODE_OFF
             }
         }
 
