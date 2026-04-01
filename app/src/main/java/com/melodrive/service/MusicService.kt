@@ -45,7 +45,7 @@ class MusicService : MediaBrowserServiceCompat() {
         mediaSession = MediaSessionCompat(this, TAG).apply {
             setFlags(
                 MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
-                MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
+                        MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
             )
             setCallback(sessionCallback)
             isActive = true
@@ -115,9 +115,17 @@ class MusicService : MediaBrowserServiceCompat() {
             stopForeground(STOP_FOREGROUND_REMOVE)
             mediaSession.isActive = false
         }
+
         override fun onSkipToNext() = player.seekToNextMediaItem()
         override fun onSkipToPrevious() = player.seekToPreviousMediaItem()
         override fun onSeekTo(pos: Long) = player.seekTo(pos)
+        override fun onSetRepeatMode(repeatMode: Int) {
+            player.repeatMode = when (repeatMode) {
+                android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ONE -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                android.support.v4.media.session.PlaybackStateCompat.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+            }
+        }
 
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
             val track = MusicRepository.findById(mediaId ?: return) ?: return
@@ -160,6 +168,16 @@ class MusicService : MediaBrowserServiceCompat() {
     }
 
     private val playerListener = object : Player.Listener {
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            mediaSession.setRepeatMode(
+                when (repeatMode) {
+                    androidx.media3.common.Player.REPEAT_MODE_ONE -> PlaybackStateCompat.REPEAT_MODE_ONE
+                    androidx.media3.common.Player.REPEAT_MODE_ALL -> PlaybackStateCompat.REPEAT_MODE_ALL
+                    else -> PlaybackStateCompat.REPEAT_MODE_NONE
+                }
+            )
+        }
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             updatePlaybackState()
             if (isPlaying) {
@@ -171,6 +189,14 @@ class MusicService : MediaBrowserServiceCompat() {
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) = updatePlaybackState()
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            updatePlaybackState()
+        }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queue.getOrNull(player.currentMediaItemIndex)?.let { updateMetadata(it) }
@@ -189,13 +215,13 @@ class MusicService : MediaBrowserServiceCompat() {
                 .setState(state, player.currentPosition, 1f)
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
-                    PlaybackStateCompat.ACTION_PAUSE or
-                    PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                    PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                    PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                    PlaybackStateCompat.ACTION_SEEK_TO or
-                    PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID or
-                    PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH
+                            PlaybackStateCompat.ACTION_PAUSE or
+                            PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                            PlaybackStateCompat.ACTION_SEEK_TO or
+                            PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID or
+                            PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH
                 )
                 .build()
         )
@@ -240,7 +266,9 @@ class MusicService : MediaBrowserServiceCompat() {
                 URL(uri.toString()).openStream().use { BitmapFactory.decodeStream(it) }
             }
         }
-    } catch (_: Exception) { null }
+    } catch (_: Exception) {
+        null
+    }
 
     // saves a bitmap to cache and returns a file:// uri string coil can load
     private fun saveArtworkToCache(trackId: String, bitmap: Bitmap): String? = try {
@@ -248,7 +276,9 @@ class MusicService : MediaBrowserServiceCompat() {
         val file = File(cacheDir, "art_$safe.jpg")
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
         Uri.fromFile(file).toString()
-    } catch (_: Exception) { null }
+    } catch (_: Exception) {
+        null
+    }
 
     override fun onDestroy() {
         serviceJob.cancel()
