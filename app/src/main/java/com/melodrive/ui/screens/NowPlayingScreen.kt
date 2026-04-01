@@ -96,6 +96,8 @@ fun NowPlayingScreen(
                     TextButton(onClick = { showClearDialog = true }) {
                         Text("Clear")
                     }
+                } else {
+                    Spacer(modifier = Modifier.height(48.dp))
                 }
             }
             BufferList(
