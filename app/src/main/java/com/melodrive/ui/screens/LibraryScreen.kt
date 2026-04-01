@@ -86,7 +86,7 @@ fun LibraryScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (state.folderUri != null) {
-                    val folderName = state.folderUri?.lastPathSegment?.substringAfterLast(':') ?: "Unknown"
+                    val folderName = Uri.decode(state.folderUri?.lastPathSegment?.substringAfterLast(':') ?: "Unknown")
                     Text(
                         text = folderName,
                         style = MaterialTheme.typography.bodySmall,
