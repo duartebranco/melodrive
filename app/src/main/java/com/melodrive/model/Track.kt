@@ -14,4 +14,5 @@ data class Track(
     // local: file uri; youtube: video id (resolved to stream url at play time)
     val uri: Uri,
     val artworkUri: Uri? = null,
+    val folder: String = "",
 )

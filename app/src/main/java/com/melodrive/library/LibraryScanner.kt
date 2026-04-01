@@ -39,14 +39,14 @@ object LibraryScanner {
             when {
                 file.isDirectory -> collectAudioFiles(context, file, out)
                 file.type in SUPPORTED_MIME_TYPES -> {
-                    val track = readTrack(context, file) ?: continue
+                    val track = readTrack(context, file, dir.name ?: "") ?: continue
                     out.add(track)
                 }
             }
         }
     }
 
-    private fun readTrack(context: Context, file: DocumentFile): Track? {
+    private fun readTrack(context: Context, file: DocumentFile, folderName: String): Track? {
         val uri = file.uri
         val retriever = MediaMetadataRetriever()
         return try {
@@ -66,6 +66,7 @@ object LibraryScanner {
                 durationMs = durationMs,
                 source = TrackSource.LOCAL,
                 uri = uri,
+                folder = folderName,
                 // artwork is loaded lazily via ArtworkLoader
             )
         } catch (_: Exception) {
