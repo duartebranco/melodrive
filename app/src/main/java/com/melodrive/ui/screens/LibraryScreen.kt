@@ -98,18 +98,6 @@ fun LibraryScreen(
             }
         }
 
-        if (state.folderUri != null) {
-            val folderName = Uri.decode(state.folderUri?.lastPathSegment?.substringAfterLast(':') ?: "Unknown")
-            Text(
-                text = "/$folderName",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp)
-            )
-        }
-
         when {
             state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
