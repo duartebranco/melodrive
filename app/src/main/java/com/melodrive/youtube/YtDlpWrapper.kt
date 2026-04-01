@@ -6,7 +6,6 @@ import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.ServiceList.YouTube
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
-import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -26,7 +25,7 @@ data class YtSearchResult(
 
 object YtDlpWrapper {
 
-    // searches YouTube Music (music.youtube.com) for songs — returns only music, no videos
+    // searches YouTube Music for songs, albums, and artists
     suspend fun search(query: String, maxResults: Int = 20): List<YtSearchResult> =
         withContext(Dispatchers.IO) {
             try {
@@ -35,42 +34,31 @@ object YtDlpWrapper {
                     listOf(
                         YoutubeSearchQueryHandlerFactory.MUSIC_SONGS,
                         YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS,
-                        YoutubeSearchQueryHandlerFactory.MUSIC_ARTISTS
+                        YoutubeSearchQueryHandlerFactory.MUSIC_ARTISTS,
                     ),
                     "",
                 )
-                val info = SearchInfo.getInfo(YouTube, handler)
-                info.relatedItems
+                SearchInfo.getInfo(YouTube, handler).relatedItems
                     .take(maxResults)
                     .mapNotNull { item ->
                         when (item) {
-                            is StreamInfoItem -> YtSearchResult(
-                                videoId = extractVideoId(item.url) ?: return@mapNotNull null,
-                                title = item.name,
-                                artist = item.uploaderName ?: "",
-                                thumbnailUrl = item.thumbnails.firstOrNull()?.url ?: "",
-                                durationSeconds = item.duration.toInt(),
-                                type = ResultType.SONG
-                            )
-
+                            is StreamInfoItem -> item.toResult(ResultType.SONG)
                             is org.schabi.newpipe.extractor.playlist.PlaylistInfoItem -> YtSearchResult(
-                                videoId = item.url, // For albums, videoId is the url for later fetching
+                                videoId = item.url,
                                 title = item.name,
                                 artist = item.uploaderName ?: "",
                                 thumbnailUrl = item.thumbnails.firstOrNull()?.url ?: "",
                                 durationSeconds = 0,
-                                type = ResultType.ALBUM
+                                type = ResultType.ALBUM,
                             )
-
                             is org.schabi.newpipe.extractor.channel.ChannelInfoItem -> YtSearchResult(
-                                videoId = item.url, // For artists, videoId is the channel url
+                                videoId = item.url,
                                 title = item.name,
                                 artist = "",
                                 thumbnailUrl = item.thumbnails.firstOrNull()?.url ?: "",
                                 durationSeconds = 0,
-                                type = ResultType.ARTIST
+                                type = ResultType.ARTIST,
                             )
-
                             else -> null
                         }
                     }
@@ -79,6 +67,7 @@ object YtDlpWrapper {
             }
         }
 
+    // searches YouTube Music for songs only
     suspend fun searchSongs(query: String, maxResults: Int = 20): List<YtSearchResult> =
         withContext(Dispatchers.IO) {
             try {
@@ -87,20 +76,10 @@ object YtDlpWrapper {
                     listOf(YoutubeSearchQueryHandlerFactory.MUSIC_SONGS),
                     "",
                 )
-                val info = SearchInfo.getInfo(YouTube, handler)
-                info.relatedItems
+                SearchInfo.getInfo(YouTube, handler).relatedItems
                     .filterIsInstance<StreamInfoItem>()
                     .take(maxResults)
-                    .mapNotNull { item ->
-                        YtSearchResult(
-                            videoId = extractVideoId(item.url) ?: return@mapNotNull null,
-                            title = item.name,
-                            artist = item.uploaderName ?: "",
-                            thumbnailUrl = item.thumbnails.firstOrNull()?.url ?: "",
-                            durationSeconds = item.duration.toInt(),
-                            type = ResultType.SONG
-                        )
-                    }
+                    .mapNotNull { it.toResult(ResultType.SONG) }
             } catch (_: Exception) {
                 emptyList()
             }
@@ -109,17 +88,10 @@ object YtDlpWrapper {
     suspend fun getAlbumSongs(url: String): List<YtSearchResult> =
         withContext(Dispatchers.IO) {
             try {
-                val info = org.schabi.newpipe.extractor.playlist.PlaylistInfo.getInfo(YouTube, url)
-                info.relatedItems.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
-                    YtSearchResult(
-                        videoId = extractVideoId(stream.url) ?: return@mapNotNull null,
-                        title = stream.name,
-                        artist = stream.uploaderName ?: "",
-                        thumbnailUrl = stream.thumbnails.firstOrNull()?.url ?: "",
-                        durationSeconds = stream.duration.toInt(),
-                        type = ResultType.SONG
-                    )
-                }
+                org.schabi.newpipe.extractor.playlist.PlaylistInfo.getInfo(YouTube, url)
+                    .relatedItems
+                    .filterIsInstance<StreamInfoItem>()
+                    .mapNotNull { it.toResult(ResultType.SONG) }
             } catch (_: Exception) {
                 emptyList()
             }
@@ -135,36 +107,38 @@ object YtDlpWrapper {
             }
         }
 
-    // resolves a video id to a direct audio stream url via YouTube Music
+    // resolves a video id to a direct audio stream url
     suspend fun resolveStreamUrl(videoId: String): Uri? =
         withContext(Dispatchers.IO) {
-            try {
-                val info = StreamInfo.getInfo(
-                    YouTube,
-                    "https://music.youtube.com/watch?v=$videoId",
-                )
-                val best = info.audioStreams
-                    .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-                    .maxByOrNull { it.averageBitrate }
-                    ?: info.audioStreams.firstOrNull()
-                best?.content?.let { Uri.parse(it) }
-            } catch (_: Exception) {
-                // fallback to regular youtube url
+            val urls = listOf(
+                "https://music.youtube.com/watch?v=$videoId",
+                "https://www.youtube.com/watch?v=$videoId",
+            )
+            for (url in urls) {
                 try {
-                    val info = StreamInfo.getInfo(
-                        YouTube,
-                        "https://www.youtube.com/watch?v=$videoId",
-                    )
-                    val best = info.audioStreams
+                    val best = StreamInfo.getInfo(YouTube, url).audioStreams
                         .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
                         .maxByOrNull { it.averageBitrate }
-                        ?: info.audioStreams.firstOrNull()
-                    best?.content?.let { Uri.parse(it) }
+                        ?: StreamInfo.getInfo(YouTube, url).audioStreams.firstOrNull()
+                    if (best?.content != null) return@withContext Uri.parse(best.content)
                 } catch (_: Exception) {
-                    null
+                    // try next url
                 }
             }
+            null
         }
+
+    private fun StreamInfoItem.toResult(type: ResultType): YtSearchResult? {
+        val id = extractVideoId(url) ?: return null
+        return YtSearchResult(
+            videoId = id,
+            title = name,
+            artist = uploaderName ?: "",
+            thumbnailUrl = thumbnails.firstOrNull()?.url ?: "",
+            durationSeconds = duration.toInt(),
+            type = type,
+        )
+    }
 
     private fun extractVideoId(url: String): String? =
         Regex("[?&]v=([^&]+)").find(url)?.groupValues?.get(1)
