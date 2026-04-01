@@ -24,6 +24,9 @@ import com.melodrive.youtube.YtDlpWrapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URL
@@ -180,13 +183,19 @@ class MusicService : MediaBrowserServiceCompat() {
     fun playQueue(tracks: List<Track>, startIndex: Int) {
         queue = tracks
         serviceScope.launch {
-            val items = tracks.mapIndexed { i, track ->
-                if (track.source == TrackSource.YOUTUBE && i == startIndex) {
-                    val streamUri = YtDlpWrapper.resolveStreamUrl(track.id) ?: track.uri
-                    MediaItem.fromUri(streamUri)
-                } else {
-                    MediaItem.fromUri(track.uri)
-                }
+            // Resolve every YouTube track's stream URL in parallel before touching
+            // ExoPlayer — raw watch?v= URLs are not playable by the player.
+            val items = coroutineScope {
+                tracks.map { track ->
+                    async(Dispatchers.IO) {
+                        if (track.source == TrackSource.YOUTUBE) {
+                            val uri = YtDlpWrapper.resolveStreamUrl(track.id) ?: track.uri
+                            MediaItem.fromUri(uri)
+                        } else {
+                            MediaItem.fromUri(track.uri)
+                        }
+                    }
+                }.awaitAll()
             }
             player.setMediaItems(items, startIndex, 0L)
             player.prepare()
