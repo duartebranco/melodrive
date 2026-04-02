@@ -27,6 +27,7 @@ class StreamViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<StreamState> = _state
 
     private var searchJob: Job? = null
+    private var currentDetailJob: Job? = null
 
     init {
         // populate the tab immediately so the user sees music without having to search first
@@ -81,12 +82,13 @@ class StreamViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openDetail(result: YtSearchResult) {
+        currentDetailJob?.cancel()
         _state.value = _state.value.copy(
             detailResult = result,
             detailTracks = emptyList(),
             detailLoading = true,
         )
-        viewModelScope.launch {
+        currentDetailJob = viewModelScope.launch {
             val tracks = when (result.type) {
                 ResultType.ALBUM -> YtDlpWrapper.getAlbumSongs(result.videoId)
                 ResultType.ARTIST -> YtDlpWrapper.getArtistSongs(result.videoId, result.title)
@@ -97,6 +99,7 @@ class StreamViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun closeDetail() {
+        currentDetailJob?.cancel()
         _state.value = _state.value.copy(
             detailResult = null,
             detailTracks = emptyList(),

@@ -28,6 +28,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URL
 
@@ -181,28 +184,53 @@ class MusicService : MediaBrowserServiceCompat() {
     }
 
     fun playQueue(tracks: List<Track>, startIndex: Int) {
-        queue = tracks
         serviceScope.launch {
-            // Resolve every YouTube track's stream URL in parallel before touching
-            // ExoPlayer — raw watch?v= URLs are not playable by the player.
-            val items = coroutineScope {
-                tracks.map { track ->
-                    async(Dispatchers.IO) {
-                        if (track.source == TrackSource.YOUTUBE) {
-                            val uri = YtDlpWrapper.resolveStreamUrl(track.id) ?: track.uri
-                            MediaItem.fromUri(uri)
-                        } else {
-                            MediaItem.fromUri(track.uri)
-                        }
-                    }
-                }.awaitAll()
+            val startTrack = tracks.getOrNull(startIndex) ?: return@launch
+            val startUri = if (startTrack.source == TrackSource.YOUTUBE) {
+                withContext(Dispatchers.IO) { YtDlpWrapper.resolveStreamUrl(startTrack.id) }
+            } else {
+                startTrack.uri
             }
-            player.setMediaItems(items, startIndex, 0L)
+
+            if (startUri == null) return@launch // Skip if start track fails
+
+            queue = listOf(startTrack)
+            player.setMediaItem(MediaItem.fromUri(startUri))
             player.prepare()
             player.play()
-            val track = tracks[startIndex]
-            updateMetadata(track)
-            MusicRepository.addToHistory(track)
+            updateMetadata(startTrack)
+            MusicRepository.addToHistory(startTrack)
+
+            // Resolve the rest in background iteratively
+            launch {
+                val semaphore = Semaphore(3)
+
+                for (i in tracks.indices) {
+                    if (i == startIndex) continue
+                    val track = tracks[i]
+
+                    val uri = withContext(Dispatchers.IO) {
+                        semaphore.withPermit {
+                            if (track.source == TrackSource.YOUTUBE) {
+                                YtDlpWrapper.resolveStreamUrl(track.id)
+                            } else {
+                                track.uri
+                            }
+                        }
+                    }
+
+                    if (uri != null) {
+                        val mediaItem = MediaItem.fromUri(uri)
+                        // Find the right place to insert so the final queue order matches the tracks request
+                        val insertIndex = queue.count { queueTrack -> tracks.indexOf(queueTrack) < i }
+                        player.addMediaItem(insertIndex, mediaItem)
+
+                        val newQueue = queue.toMutableList()
+                        newQueue.add(insertIndex, track)
+                        queue = newQueue
+                    }
+                }
+            }
         }
     }
 

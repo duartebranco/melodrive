@@ -20,6 +20,7 @@ enum class ResultType {
 }
 
 data class YtSearchResult(
+    // For albums and artists, videoId contains a full URL.
     val videoId: String,
     val title: String,
     val artist: String,
@@ -62,9 +63,9 @@ object YtDlpWrapper {
                         val a = albumQ.removeFirstOrNull()
                         val r = artistQ.removeFirstOrNull()
                         if (s == null && a == null && r == null) break
-                        s?.let { add(it) }
-                        a?.let { add(it) }
-                        r?.let { add(it) }
+                        if (s != null && size < maxResults) add(s)
+                        if (a != null && size < maxResults) add(a)
+                        if (r != null && size < maxResults) add(r)
                     }
                 }
             }
@@ -158,6 +159,7 @@ object YtDlpWrapper {
                             type = ResultType.ALBUM,
                         )
                     }
+
                     ResultType.ARTIST -> (item as? org.schabi.newpipe.extractor.channel.ChannelInfoItem)?.let {
                         YtSearchResult(
                             videoId = it.url,
