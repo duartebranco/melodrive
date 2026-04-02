@@ -23,6 +23,7 @@ import com.melodrive.model.TrackSource
 import com.melodrive.youtube.YtDlpWrapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -42,6 +43,7 @@ class MusicService : MediaBrowserServiceCompat() {
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+    private var playQueueJob: Job? = null
 
     private var queue: List<Track> = emptyList()
 
@@ -148,9 +150,18 @@ class MusicService : MediaBrowserServiceCompat() {
         override fun onPlay() = player.play()
         override fun onPause() = player.pause()
         override fun onStop() {
+            playQueueJob?.cancel()
             player.stop()
+            player.clearMediaItems()
+            queue = emptyList()
             stopForeground(STOP_FOREGROUND_REMOVE)
             mediaSession.isActive = false
+            mediaSession.setMetadata(null)
+            mediaSession.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_NONE, 0, 0f)
+                    .build()
+            )
         }
 
         override fun onSkipToNext() = player.seekToNextMediaItem()
@@ -166,6 +177,12 @@ class MusicService : MediaBrowserServiceCompat() {
 
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
             val trackId = mediaId ?: return
+            val queueIndex = queue.indexOfFirst { it.id == trackId }
+            if (queueIndex >= 0) {
+                player.seekToDefaultPosition(queueIndex)
+                player.play()
+                return
+            }
             val tracks = MusicRepository.mainBuffer.value
             if (tracks.isEmpty()) return
             val index = tracks.indexOfFirst { it.id == trackId }
@@ -184,15 +201,32 @@ class MusicService : MediaBrowserServiceCompat() {
     }
 
     fun playQueue(tracks: List<Track>, startIndex: Int) {
-        serviceScope.launch {
+        playQueueJob?.cancel()
+        playQueueJob = serviceScope.launch {
             val startTrack = tracks.getOrNull(startIndex) ?: return@launch
+
+            player.stop()
+            updateMetadata(startTrack)
+            mediaSession.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_BUFFERING, 0, 1f)
+                    .build()
+            )
+
             val startUri = if (startTrack.source == TrackSource.YOUTUBE) {
                 withContext(Dispatchers.IO) { YtDlpWrapper.resolveStreamUrl(startTrack.id) }
             } else {
                 startTrack.uri
             }
 
-            if (startUri == null) return@launch // Skip if start track fails
+            if (startUri == null) {
+                mediaSession.setPlaybackState(
+                    PlaybackStateCompat.Builder()
+                        .setState(PlaybackStateCompat.STATE_STOPPED, 0, 0f)
+                        .build()
+                )
+                return@launch
+            }
 
             queue = listOf(startTrack)
             player.setMediaItem(MediaItem.fromUri(startUri))
