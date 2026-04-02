@@ -86,7 +86,7 @@ class StreamViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val tracks = when (result.type) {
                 ResultType.ALBUM -> YtDlpWrapper.getAlbumSongs(result.videoId)
-                ResultType.ARTIST -> YtDlpWrapper.getArtistSongs(result.videoId)
+                ResultType.ARTIST -> YtDlpWrapper.getArtistSongs(result.videoId, result.title)
                 else -> emptyList()
             }
             _state.value = _state.value.copy(detailTracks = tracks, detailLoading = false)

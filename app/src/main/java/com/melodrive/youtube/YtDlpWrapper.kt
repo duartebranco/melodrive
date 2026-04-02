@@ -89,19 +89,18 @@ object YtDlpWrapper {
             }
         }
 
-    // Browses the artist's own channel tabs (TRACKS first, then VIDEOS) so we
-    // get their actual library instead of a generic name search.
-    suspend fun getArtistSongs(url: String): List<YtSearchResult> =
+    // Browses the artist's own channel tabs (TRACKS first, then VIDEOS).
+    // name is the display name from the search result — used in the filtered
+    // fallback if the channel browse fails or returns nothing.
+    suspend fun getArtistSongs(url: String, name: String = ""): List<YtSearchResult> =
         withContext(Dispatchers.IO) {
+            // 1. Try the channel tab — all results will be the artist's own content.
             try {
                 val info = ChannelInfo.getInfo(YouTube, url)
+                val artistName = info.name.takeIf { it.isNotEmpty() } ?: name
 
-                // Prefer the dedicated tracks/songs tab; fall back to videos.
-                val tab = info.tabs.firstOrNull { tab ->
-                    tab.contentFilters.contains(ChannelTabs.TRACKS)
-                } ?: info.tabs.firstOrNull { tab ->
-                    tab.contentFilters.contains(ChannelTabs.VIDEOS)
-                }
+                val tab = info.tabs.firstOrNull { it.contentFilters.contains(ChannelTabs.TRACKS) }
+                    ?: info.tabs.firstOrNull { it.contentFilters.contains(ChannelTabs.VIDEOS) }
 
                 if (tab != null) {
                     val tracks = ChannelTabInfo.getInfo(YouTube, tab)
@@ -112,15 +111,27 @@ object YtDlpWrapper {
                     if (tracks.isNotEmpty()) return@withContext tracks
                 }
 
-                // Fallback: name search filtered strictly to this artist so that songs
-                // which merely mention the artist name in their title are excluded.
-                searchByFilter(info.name, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS, ResultType.SONG)
-                    .filter { it.artist.lowercase().contains(info.name.lowercase()) }
-                    .take(50)
+                // Channel info loaded but no usable tab / empty tab — fall through to
+                // name search using the resolved name.
+                return@withContext nameSearch(artistName)
             } catch (_: Exception) {
-                emptyList()
+                // Channel browse failed entirely — fall through to name search.
             }
+
+            // 2. Name search filtered to this artist to exclude unrelated tracks.
+            nameSearch(name)
         }
+
+    private fun nameSearch(name: String): List<YtSearchResult> {
+        if (name.isEmpty()) return emptyList()
+        return try {
+            searchByFilter(name, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS, ResultType.SONG)
+                .filter { it.artist.lowercase().contains(name.lowercase()) }
+                .take(50)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
 
     // Resolves a video ID to a direct audio stream URL.
     suspend fun resolveStreamUrl(videoId: String): Uri? =
