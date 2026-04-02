@@ -50,13 +50,22 @@ object YtDlpWrapper {
                 val albums = albumsJob.await()
                 val artists = artistsJob.await()
 
-                // Interleave: songs get half the quota, albums and artists split the rest.
-                val songCount = maxResults / 2
-                val sideCount = maxResults / 4
+                // Round-robin interleave: song, album, artist, song, album, artist…
+                // Surfaces the top-ranked result from each type before any lower-ranked
+                // ones, matching YouTube Music's natural mixed relevance order.
                 buildList {
-                    addAll(songs.take(songCount))
-                    addAll(albums.take(sideCount))
-                    addAll(artists.take(sideCount))
+                    val songQ = ArrayDeque(songs)
+                    val albumQ = ArrayDeque(albums)
+                    val artistQ = ArrayDeque(artists)
+                    while (size < maxResults) {
+                        val s = songQ.removeFirstOrNull()
+                        val a = albumQ.removeFirstOrNull()
+                        val r = artistQ.removeFirstOrNull()
+                        if (s == null && a == null && r == null) break
+                        s?.let { add(it) }
+                        a?.let { add(it) }
+                        r?.let { add(it) }
+                    }
                 }
             }
         }

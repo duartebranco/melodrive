@@ -14,6 +14,9 @@ data class StreamState(
     val results: List<YtSearchResult> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
+    val detailResult: YtSearchResult? = null,
+    val detailTracks: List<YtSearchResult> = emptyList(),
+    val detailLoading: Boolean = false,
 )
 
 class StreamViewModel(app: Application) : AndroidViewModel(app) {
@@ -72,6 +75,30 @@ class StreamViewModel(app: Application) : AndroidViewModel(app) {
             searchJob?.cancel()
             loadInitial()
         }
+    }
+
+    fun openDetail(result: YtSearchResult) {
+        _state.value = _state.value.copy(
+            detailResult = result,
+            detailTracks = emptyList(),
+            detailLoading = true,
+        )
+        viewModelScope.launch {
+            val tracks = when (result.type) {
+                ResultType.ALBUM -> YtDlpWrapper.getAlbumSongs(result.videoId)
+                ResultType.ARTIST -> YtDlpWrapper.getArtistSongs(result.videoId)
+                else -> emptyList()
+            }
+            _state.value = _state.value.copy(detailTracks = tracks, detailLoading = false)
+        }
+    }
+
+    fun closeDetail() {
+        _state.value = _state.value.copy(
+            detailResult = null,
+            detailTracks = emptyList(),
+            detailLoading = false,
+        )
     }
 
     fun search() {
