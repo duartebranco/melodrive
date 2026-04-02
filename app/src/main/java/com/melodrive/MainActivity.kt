@@ -160,11 +160,10 @@ class MainActivity : ComponentActivity() {
                                 })
                             }
                             composable("stream") {
-                                StreamScreen(onTracksClick = { tracks ->
+                                StreamScreen(onTracksClick = { tracks, startIndex ->
                                     if (tracks.isNotEmpty()) {
-                                        val selectedTrack = tracks.first()
-                                        MusicRepository.addAllToMainBuffer(tracks)
-                                        MusicRepository.addToMainBufferAndMoveToFront(selectedTrack)
+                                        MusicRepository.setMainBuffer(tracks)
+                                        val selectedTrack = tracks[startIndex]
                                         mediaController?.transportControls
                                             ?.playFromMediaId(selectedTrack.id, null)
                                         navController.navigate("now_playing") { launchSingleTop = true }
