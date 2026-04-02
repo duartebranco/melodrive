@@ -149,8 +149,16 @@ class MusicService : MediaBrowserServiceCompat() {
         override fun onPause() = player.pause()
         override fun onStop() {
             player.stop()
+            player.clearMediaItems()
+            queue = emptyList()
             stopForeground(STOP_FOREGROUND_REMOVE)
             mediaSession.isActive = false
+            mediaSession.setMetadata(null)
+            mediaSession.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_NONE, 0, 0f)
+                    .build()
+            )
         }
 
         override fun onSkipToNext() = player.seekToNextMediaItem()
@@ -166,6 +174,12 @@ class MusicService : MediaBrowserServiceCompat() {
 
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
             val trackId = mediaId ?: return
+            val queueIndex = queue.indexOfFirst { it.id == trackId }
+            if (queueIndex >= 0) {
+                player.seekToDefaultPosition(queueIndex)
+                player.play()
+                return
+            }
             val tracks = MusicRepository.mainBuffer.value
             if (tracks.isEmpty()) return
             val index = tracks.indexOfFirst { it.id == trackId }
@@ -186,6 +200,15 @@ class MusicService : MediaBrowserServiceCompat() {
     fun playQueue(tracks: List<Track>, startIndex: Int) {
         serviceScope.launch {
             val startTrack = tracks.getOrNull(startIndex) ?: return@launch
+
+            player.stop()
+            updateMetadata(startTrack)
+            mediaSession.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_BUFFERING, 0, 1f)
+                    .build()
+            )
+
             val startUri = if (startTrack.source == TrackSource.YOUTUBE) {
                 withContext(Dispatchers.IO) { YtDlpWrapper.resolveStreamUrl(startTrack.id) }
             } else {

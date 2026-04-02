@@ -26,6 +26,7 @@ data class NowPlayingState(
     val artist: String = "",
     val artworkUri: Uri? = null,
     val isPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val connected: Boolean = false,
@@ -77,8 +78,10 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
 
         override fun onPlaybackStateChanged(playbackState: PlaybackStateCompat?) {
             val isPlaying = playbackState?.state == PlaybackStateCompat.STATE_PLAYING
+            val isBuffering = playbackState?.state == PlaybackStateCompat.STATE_BUFFERING
             _state.value = _state.value.copy(
                 isPlaying = isPlaying,
+                isBuffering = isBuffering,
                 positionMs = currentPosition(playbackState),
             )
             if (isPlaying) startTicker() else stopTicker()
@@ -114,7 +117,17 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearMainBuffer() {
         MusicRepository.clearMainBuffer()
-        if (state.value.isPlaying) controller?.transportControls?.pause()
+        controller?.transportControls?.stop()
+        _state.value = _state.value.copy(
+            currentTrackId = "",
+            title = "",
+            artist = "",
+            artworkUri = null,
+            durationMs = 0L,
+            positionMs = 0L,
+            isPlaying = false,
+            isBuffering = false
+        )
     }
 
     fun removeFromMainBuffer(trackId: String) {
@@ -139,7 +152,7 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun playFromMainBuffer(track: Track) {
-        MusicRepository.addToMainBufferAndMoveToFront(track)
+        controller?.transportControls?.stop()
         controller?.transportControls?.playFromMediaId(track.id, null)
     }
 
@@ -147,7 +160,7 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
         val buffer = mainBuffer.value
         if (index !in buffer.indices) return
         val track = buffer[index]
-        MusicRepository.addToMainBufferAndMoveToFront(track)
+        controller?.transportControls?.stop()
         controller?.transportControls?.playFromMediaId(track.id, null)
     }
 

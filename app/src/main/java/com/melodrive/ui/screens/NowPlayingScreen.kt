@@ -111,6 +111,7 @@ fun NowPlayingScreen(
                 title = state.title.ifEmpty { "Nothing Playing" },
                 artist = state.artist,
                 isPlaying = state.isPlaying,
+                isBuffering = state.isBuffering,
                 onSkipPrevious = vm::skipPrevious,
                 onTogglePlayPause = vm::togglePlayPause,
                 onSkipNext = vm::skipNext,
@@ -135,6 +136,7 @@ fun NowPlayingScreen(
                 artist = state.artist,
                 artworkUri = state.artworkUri,
                 isPlaying = state.isPlaying,
+                isBuffering = state.isBuffering,
                 positionMs = state.positionMs,
                 durationMs = state.durationMs,
                 repeatMode = state.repeatMode,
@@ -258,6 +260,7 @@ private fun MiniPlayer(
     title: String,
     artist: String,
     isPlaying: Boolean,
+    isBuffering: Boolean,
     onSkipPrevious: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onSkipNext: () -> Unit,
@@ -296,11 +299,19 @@ private fun MiniPlayer(
             IconButton(onClick = onSkipPrevious) {
                 Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
             }
-            IconButton(onClick = onTogglePlayPause) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = "Play Pause",
+            if (isBuffering) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.padding(12.dp).size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+            } else {
+                IconButton(onClick = onTogglePlayPause) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = "Play Pause",
+                    )
+                }
             }
             IconButton(onClick = onSkipNext) {
                 Icon(Icons.Default.SkipNext, contentDescription = "Next")
@@ -315,6 +326,7 @@ private fun FullPlayer(
     artist: String,
     artworkUri: Uri?,
     isPlaying: Boolean,
+    isBuffering: Boolean,
     positionMs: Long,
     durationMs: Long,
     repeatMode: Int,
@@ -400,12 +412,20 @@ private fun FullPlayer(
             IconButton(onClick = onSkipPrevious, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(34.dp))
             }
-            IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(68.dp)) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = "Play Pause",
-                    modifier = Modifier.size(40.dp),
+            if (isBuffering) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.padding(14.dp).size(40.dp),
+                    strokeWidth = 3.dp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+            } else {
+                IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(68.dp)) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = "Play Pause",
+                        modifier = Modifier.size(40.dp),
+                    )
+                }
             }
             IconButton(onClick = onSkipNext, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Default.SkipNext, contentDescription = "Next", modifier = Modifier.size(34.dp))
