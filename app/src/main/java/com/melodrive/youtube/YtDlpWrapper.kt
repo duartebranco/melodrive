@@ -104,15 +104,19 @@ object YtDlpWrapper {
                 }
 
                 if (tab != null) {
-                    ChannelTabInfo.getInfo(YouTube, tab)
+                    val tracks = ChannelTabInfo.getInfo(YouTube, tab)
                         .relatedItems
                         .filterIsInstance<StreamInfoItem>()
                         .mapNotNull { it.toResult(ResultType.SONG) }
                         .take(50)
-                } else {
-                    // Last resort: search by artist name.
-                    searchSongs(info.name, 50)
+                    if (tracks.isNotEmpty()) return@withContext tracks
                 }
+
+                // Fallback: name search filtered strictly to this artist so that songs
+                // which merely mention the artist name in their title are excluded.
+                searchByFilter(info.name, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS, ResultType.SONG)
+                    .filter { it.artist.lowercase().contains(info.name.lowercase()) }
+                    .take(50)
             } catch (_: Exception) {
                 emptyList()
             }

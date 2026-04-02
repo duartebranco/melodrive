@@ -152,14 +152,17 @@ fun StreamScreen(
                 tracks = state.detailTracks,
                 loading = state.detailLoading,
                 onPlayAll = {
+                    vm.addToHistory(listOf(state.detailResult!!))
                     onTracksClick(state.detailTracks.map { it.toTrack() }, 0)
                     vm.closeDetail()
                 },
                 onShuffle = {
+                    vm.addToHistory(listOf(state.detailResult!!))
                     onTracksClick(state.detailTracks.shuffled().map { it.toTrack() }, 0)
                     vm.closeDetail()
                 },
                 onTrackClick = { index ->
+                    vm.addToHistory(listOf(state.detailResult!!))
                     onTracksClick(state.detailTracks.map { it.toTrack() }, index)
                     vm.closeDetail()
                 },
@@ -179,10 +182,12 @@ private fun ResultList(
             ResultRow(
                 result = result,
                 onClick = {
-                    vm.addToHistory(listOf(result))
                     if (result.type == ResultType.SONG) {
+                        vm.addToHistory(listOf(result))
                         onTracksClick(listOf(result.toTrack()), 0)
                     } else {
+                        // history is written when the user actually presses Play/Shuffle,
+                        // not just when they open the detail sheet
                         vm.openDetail(result)
                     }
                 },
