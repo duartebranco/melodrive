@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -74,6 +75,8 @@ class StreamViewModel(app: Application) : AndroidViewModel(app) {
         if (q.isEmpty()) {
             searchJob?.cancel()
             loadInitial()
+        } else if (q.length >= 3) {
+            search()
         }
     }
 
@@ -110,6 +113,7 @@ class StreamViewModel(app: Application) : AndroidViewModel(app) {
         }
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
+            delay(500L)
             _state.value = _state.value.copy(loading = true, error = null)
             val results = YtDlpWrapper.search(q)
             _state.value = _state.value.copy(

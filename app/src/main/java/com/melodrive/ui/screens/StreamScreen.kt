@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -66,6 +67,7 @@ fun StreamScreen(
 ) {
     val state by vm.state.collectAsState()
     val searchInteraction = remember { MutableInteractionSource() }
+    val focusManager = LocalFocusManager.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -85,7 +87,12 @@ fun StreamScreen(
                 onValueChange = vm::onQueryChange,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { if (!state.loading) vm.search() }),
+                keyboardActions = KeyboardActions(onSearch = {
+                    if (!state.loading) {
+                        vm.search()
+                        focusManager.clearFocus()
+                    }
+                }),
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurface,
                 ),
@@ -101,7 +108,13 @@ fun StreamScreen(
                     interactionSource = searchInteraction,
                     placeholder = { Text("artist or song name") },
                     trailingIcon = {
-                        IconButton(onClick = vm::search, enabled = !state.loading) {
+                        IconButton(
+                            onClick = {
+                                vm.search()
+                                focusManager.clearFocus()
+                            },
+                            enabled = !state.loading,
+                        ) {
                             Icon(Icons.Default.Search, contentDescription = "search")
                         }
                     },
@@ -126,6 +139,7 @@ fun StreamScreen(
             state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
+
             state.results.isEmpty() && state.query.isNotEmpty() -> Hint("no results")
             state.results.isEmpty() && state.query.isEmpty() -> Hint("never streamed")
             else -> {
