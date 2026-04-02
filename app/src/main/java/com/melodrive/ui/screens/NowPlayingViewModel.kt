@@ -152,7 +152,6 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun playFromMainBuffer(track: Track) {
-        controller?.transportControls?.stop()
         controller?.transportControls?.playFromMediaId(track.id, null)
     }
 
@@ -160,7 +159,6 @@ class NowPlayingViewModel(app: Application) : AndroidViewModel(app) {
         val buffer = mainBuffer.value
         if (index !in buffer.indices) return
         val track = buffer[index]
-        controller?.transportControls?.stop()
         controller?.transportControls?.playFromMediaId(track.id, null)
     }
 
